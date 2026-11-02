@@ -23,6 +23,7 @@ spec/
   SPEC.md               the agent-facing spec for heatctl, the only file a build ever sees
   README.md             how the spec is structured and changed
   CHANGES.md            log of every spec change, with a drift flag
+  DEFERRED.md           ideas that did not make the spec
 eval/
   README.md             expectation format, how hidden checks run, the four layers, rules
 harness/
@@ -33,7 +34,7 @@ fixture/
   README.md             deployment in the house, hard limits, logging and rsyslog forwarding
 ```
 
-Referenced but not created yet: `spec/DEFERRED.md`, `harness/run/`, `fixture/DEPLOYED.md`.
+Referenced but not created yet: `harness/run/`, `fixture/DEPLOYED.md`.
 
 ## Rules that are easy to break
 
@@ -64,4 +65,4 @@ those links.
 
 ## Git
 
-Work happens on `main`.
+Work happens on `main`. An episode's work goes on its own branch, `epNN-<slug>`.

@@ -92,7 +92,8 @@ zones:
 
 Rules:
 
-- Durations use Go duration syntax. Temperatures are °C with decimals.
+- Durations use Go duration syntax. Temperatures are °C, with or without decimals: `19` and
+  `19.0` are the same.
 - `device` is the device's MQTT topic prefix. `switch` and `component` are channel ids.
 - The file is a hierarchy: each zone has exactly one relay and one or more rooms; each room
   has zero or more sensors. A room belongs to the zone it is listed under.
@@ -101,8 +102,8 @@ Rules:
 - `sensors` may be omitted or empty.
 - A room with sensors has either `target` or `schedule`, not both. A room without sensors may
   have neither.
-- Targets are between 5.0 and 30.0. A schedule has at least one entry. `from` is `HH:MM`
-  local time.
+- Targets are between 7.0 and 25.0, inclusive. A schedule has at least one entry, and every
+  entry has a `from` and a `target`. `from` is `HH:MM` local time.
 - `days` is optional. When present, it is a non-empty list of `mon`, `tue`, `wed`, `thu`,
   `fri`, `sat`, `sun`, with no repeats, and the entry applies only on those days. When
   omitted, the entry applies every day.
@@ -189,9 +190,10 @@ Any other topic is ignored. A payload that cannot be parsed is ignored and logge
   are ignored and logged. None of them stops `heatctl`.
 - R4: **start.** On start, `heatctl` knows nothing from earlier runs (C7). It requests the
   status of every relay and sends no relay command until `startup_grace` has passed or every
-  room with sensors has a temperature, whichever comes first. Then its first control cycle
-  decides every relay from scratch. A room whose temperature is inside the hysteresis band
-  starts without demand (B4).
+  room with sensors has a temperature, whichever comes first. Control cycles run during that
+  time as at any other, and write their L1 events, but a relay change they decide is not
+  sent. The first cycle after it commands every relay to its desired state, decided from
+  scratch. A room whose temperature is inside the hysteresis band starts without demand (B4).
 - R5: **stop.** On SIGINT or SIGTERM, `heatctl` turns off every relay it controls, regardless
   of `min_switch_interval`, and exits with status 0 within 5 seconds.
 
@@ -294,12 +296,12 @@ Numbers in the criteria use the defaults in section 4 unless stated otherwise.
   of the broker being back.
 - F6.AC2: a malformed payload on a sensor topic is logged and `heatctl` keeps running.
 - F6.AC3: no relay command is sent during `startup_grace` unless every room with sensors
-  already has a temperature.
+  already has a temperature. Control cycles run and are logged during it.
 - F6.AC4: SIGTERM turns every controlled relay off and exits 0 within 5 s.
 - F6.AC5: `heatctl` runs normally with the filesystem read-only except for one runtime
   directory, in which it creates nothing but a socket for status.
 - F6.AC6: `heatctl` is killed and restarted with a zone's relay on and one room at 19.0
-  against a target of 20.0: after the first control cycle the relay is on. With the room at
+  against a target of 20.0: once the room has reported, the relay is on. With the room at
   20.1 instead, inside the band, the relay is commanded off.
 - F6.AC7: started while the broker holds a retained reading for a sensor, `heatctl` ignores
   that reading; the room's temperature comes only from messages published after the start.

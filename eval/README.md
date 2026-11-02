@@ -30,12 +30,12 @@ eval/
 ```markdown
 # E004 <short name>
 
-Layer: behaviour | regression | process | negative
-Spec: F4.AC2 (spec version 1.0)
-Criterion: M | H
-Check: checks/e004-<slug>/
-Verification set: yes | no
-Frozen: yes
+- Layer: behaviour | regression | process | negative
+- Spec: F4.AC2 (spec version 1.0)
+- Criterion: M | H
+- Check: checks/e004-<slug>/
+- Verification set: yes | no
+- Frozen: yes
 
 ## Expectation
 The state the system must reach. One sentence, observable from outside the build. It never
