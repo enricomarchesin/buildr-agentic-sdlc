@@ -41,7 +41,9 @@ and relays are reached through an MQTT broker.
 - **Room**: belongs to exactly one zone. Has zero or more temperature sensors.
 - **Sensor**: one temperature reading channel on a device. A device can provide more than one.
 - **Relay**: one switch channel on a device. A device can provide more than one.
-- **Target**: the temperature a room should be at, in °C, fixed or from a weekly schedule.
+- **Target**: the temperature a room should be at, fixed or from a weekly schedule.
+- **Unit**: °C or °F, set once in the configuration. Every temperature `heatctl` reads,
+  decides on, shows or logs is in that unit. It never converts between the two.
 
 ## 4. Configuration
 
@@ -49,6 +51,8 @@ and relays are reached through an MQTT broker.
   fixed by this section; unknown keys are an error.
 
 ```yaml
+unit: C                             # required: C or F
+
 mqtt:
   broker: tcp://192.168.1.10:1883   # required
   client_id: heatctl                # optional, default heatctl
@@ -57,7 +61,7 @@ mqtt:
 
 control:                            # every key optional, defaults shown
   cycle_interval: 60s
-  hysteresis: 0.5                   # °C, applied either side of the target
+  hysteresis: 0.5                   # either side of the target; 0.5 for C, 1.0 for F
   stale_after: 45m
   min_switch_interval: 5m
   relay_lease: 15m
@@ -92,9 +96,12 @@ zones:
 
 Rules:
 
-- Durations use Go duration syntax. Temperatures are °C, with or without decimals: `19` and
-  `19.0` are the same.
-- `device` is the device's MQTT topic prefix. `switch` and `component` are channel ids.
+- `unit` is required: `C` or `F`. Every temperature in the file is in that unit, written with
+  or without decimals: `19` and `19.0` are the same.
+- The default `hysteresis` is 0.5 with unit `C` and 1.0 with unit `F`.
+- Durations use Go duration syntax.
+- `device` is the device's MQTT topic prefix. `switch` and `component` are channel ids:
+  integers, 0 or more.
 - The file is a hierarchy: each zone has exactly one relay and one or more rooms; each room
   has zero or more sensors. A room belongs to the zone it is listed under.
 - Zone ids are unique. Room ids are unique across the whole house, not only within a zone.
@@ -102,7 +109,7 @@ Rules:
 - `sensors` may be omitted or empty.
 - A room with sensors has either `target` or `schedule`, not both. A room without sensors may
   have neither.
-- Targets are between 7.0 and 25.0, inclusive. A schedule has at least one entry, and every
+- Targets are between 7.0 and 25.0 with unit `C`, or 45.0 and 77.0 with unit `F`, inclusive. A schedule has at least one entry, and every
   entry has a `from` and a `target`. `from` is `HH:MM` local time.
 - `days` is optional. When present, it is a non-empty list of `mon`, `tue`, `wed`, `thu`,
   `fri`, `sat`, `sun`, with no repeats, and the entry applies only on those days. When
@@ -115,7 +122,7 @@ Rules:
 ## 5. Devices and MQTT
 
 - I1: sensors and relays are reached only through the MQTT broker in the configuration.
-  MQTT 3.1.1, QoS 0 or 1.
+  MQTT 3.1.1, QoS 0 or 1. Nothing `heatctl` publishes is retained, its last will included.
 - I2: the topics and payloads below are the devices' own interface. They are fixed.
 
 All devices are Shelly Gen2 or later, with MQTT enabled and status notifications turned on.
@@ -134,7 +141,7 @@ All devices are Shelly Gen2 or later, with MQTT enabled and status notifications
 
 | Purpose | Topic | Payload |
 |---|---|---|
-| reading | `<device>/status/temperature:<id>` | JSON; `tC` is °C, or `null` when the device has no valid value; `errors` is present on a fault |
+| reading | `<device>/status/temperature:<id>` | JSON; `tC` is °C and `tF` is °F, each `null` when the device has no valid value; `errors` is present on a fault |
 
 Battery sensors sleep between reports and may report only on change or every few minutes.
 They do not answer status requests.
@@ -151,8 +158,8 @@ Any other topic is ignored. A payload that cannot be parsed is ignored and logge
 
 ## 6. Control behaviour
 
-- B1: **reading.** A sensor reading is valid if `tC` is a number and `errors` is absent. A
-  sensor is fresh if its last valid reading is not older than `stale_after`. A
+- B1: **reading.** A sensor reading is the payload's field for the unit: `tC` for `C`, `tF`
+  for `F`. It is valid if that field is a number and `errors` is absent. A sensor is fresh if its last valid reading is not older than `stale_after`. A
   retained sensor message delivered when `heatctl` subscribes is not a reading: its age is
   unknown, so it would be state from before the start (C7).
 - B2: **room temperature** is the mean of its fresh sensors' last valid readings. A room
@@ -168,8 +175,8 @@ Any other topic is ignored. A payload that cannot be parsed is ignored and logge
 - B5: **zone decision.** A zone's relay should be on if at least one room in the zone demands
   heat. Rooms with no temperature do not vote. A zone in which no room has a temperature is
   degraded, and its relay should be off.
-- B6: **control cycle.** One control cycle evaluates every zone. A cycle runs on every valid
-  reading and every `cycle_interval`.
+- B6: **control cycle.** One control cycle evaluates every zone. Once the start is over
+  (R4), a cycle runs on every valid reading and every `cycle_interval`.
 - B7: **switching.** When a relay's desired state changes, `heatctl` commands it. A relay is
   never switched twice within `min_switch_interval`; a change that comes too soon waits until
   the interval has passed, and is dropped if the desired state has changed back. After a
@@ -179,21 +186,23 @@ Any other topic is ignored. A payload that cannot be parsed is ignored and logge
   than `confirm_timeout`, `heatctl` sends the command again, at most once per
   `confirm_timeout`, and logs the mismatch. A relay reported offline makes its zone degraded.
 - B9: **dead-man.** If `heatctl` stops, crashes, or loses the broker, every relay it turned on
-  is off within `relay_lease`, without any action from `heatctl` after the failure.
+  is off within `relay_lease`, without any action from `heatctl` after the failure. While
+  `heatctl` runs and reaches the broker, a relay that should be on stays on: it never turns
+  itself off between two of `heatctl`'s commands.
 
 ## 7. Failures, start and stop
 
 - R2: **broker loss.** `heatctl` keeps running, reconnects with backoff capped at 60 s, logs
   each disconnect and reconnect, and after reconnecting resubscribes and re-sends every
   relay's desired state.
-- R3: **bad input.** Malformed payloads, unknown topics, and readings outside −40 to 85 °C
+- R3: **bad input.** Malformed payloads, unknown topics, and readings outside −40 to 85 °C (−40 to 185 °F)
   are ignored and logged. None of them stops `heatctl`.
 - R4: **start.** On start, `heatctl` knows nothing from earlier runs (C7). It requests the
   status of every relay and sends no relay command until `startup_grace` has passed or every
-  room with sensors has a temperature, whichever comes first. Control cycles run during that
-  time as at any other, and write their L1 events, but a relay change they decide is not
-  sent. The first cycle after it commands every relay to its desired state, decided from
-  scratch. A room whose temperature is inside the hysteresis band starts without demand (B4).
+  room with sensors has a temperature, whichever comes first. No control cycle runs before
+  then, so no L1 event is written either. Then its first control cycle decides every relay
+  from scratch. A room whose temperature is inside the hysteresis band starts without
+  demand (B4).
 - R5: **stop.** On SIGINT or SIGTERM, `heatctl` turns off every relay it controls, regardless
   of `min_switch_interval`, and exits with status 0 within 5 seconds.
 
@@ -216,11 +225,12 @@ Any other topic is ignored. A payload that cannot be parsed is ignored and logge
   object per line, with at least these fields. More fields are allowed.
 
 ```json
-{"event":"control_cycle","schema":1,"ts":"2026-11-01T06:30:00Z",
+{"event":"control_cycle","schema":1,"ts":"2026-11-01T06:30:00Z","unit":"C",
  "rooms":[{"id":"living","readings":[20.4,20.1],"temperature":20.25,"target":21.0,"demand":true}],
  "zones":[{"id":"ground","desired":"on","reported":"on","degraded":false}]}
 ```
 
+  `unit` is the unit from the configuration, and every temperature in the event is in it.
   `temperature` is `null` for a room with no fresh sensor; `target` is `null` for a room with
   neither target nor schedule. `desired` is `on` or `off`; `reported` is `on`, `off` or
   `unknown`. `ts` is RFC 3339 in UTC.
@@ -244,7 +254,7 @@ Any other topic is ignored. A payload that cannot be parsed is ignored and logge
 
 ## 12. Features and acceptance criteria
 
-Numbers in the criteria use the defaults in section 4 unless stated otherwise.
+Numbers in the criteria use unit `C` and the defaults in section 4 unless stated otherwise.
 
 ### F1 Configuration
 
@@ -279,6 +289,8 @@ Numbers in the criteria use the defaults in section 4 unless stated otherwise.
 - F4.AC4: every sensor in a zone goes stale: the relay is commanded off and the zone shows as
   degraded in **status**.
 - F4.AC5: a room without sensors never changes its zone's decision.
+- F4.AC6: with unit `F`, target 68.0 and the default hysteresis, a reading of 66.9 turns the
+  zone's relay on, 68.9 keeps it on, and 69.0 turns it off.
 
 ### F5 Relay control
 
@@ -289,19 +301,22 @@ Numbers in the criteria use the defaults in section 4 unless stated otherwise.
 - F5.AC3: `heatctl` is killed with SIGKILL while a relay is on: the relay is off within
   `relay_lease`.
 - F5.AC4: a relay reported offline makes its zone degraded.
+- F5.AC5: a relay that should be on stays on while `heatctl` runs, for longer than
+  `relay_lease`, without turning off in between.
+- F5.AC6: the broker goes away while a relay is on: the relay is off within `relay_lease`.
 
 ### F6 Failures, start and stop
 
 - F6.AC1: the broker restarts: `heatctl` reconnects and re-sends desired states within 60 s
   of the broker being back.
 - F6.AC2: a malformed payload on a sensor topic is logged and `heatctl` keeps running.
-- F6.AC3: no relay command is sent during `startup_grace` unless every room with sensors
-  already has a temperature. Control cycles run and are logged during it.
+- F6.AC3: no control cycle runs and no relay command is sent during `startup_grace` unless
+  every room with sensors already has a temperature.
 - F6.AC4: SIGTERM turns every controlled relay off and exits 0 within 5 s.
 - F6.AC5: `heatctl` runs normally with the filesystem read-only except for one runtime
   directory, in which it creates nothing but a socket for status.
 - F6.AC6: `heatctl` is killed and restarted with a zone's relay on and one room at 19.0
-  against a target of 20.0: once the room has reported, the relay is on. With the room at
+  against a target of 20.0: after the first control cycle the relay is on. With the room at
   20.1 instead, inside the band, the relay is commanded off.
 - F6.AC7: started while the broker holds a retained reading for a sensor, `heatctl` ignores
   that reading; the room's temperature comes only from messages published after the start.

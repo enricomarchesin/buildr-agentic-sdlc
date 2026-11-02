@@ -24,13 +24,14 @@ JSON line, as required by clauses L1 and L3 in `spec/SPEC.md`. The history start
 deployed.
 
 ```json
-{"event":"control_cycle","schema":1,"ts":"2026-11-01T06:30:00Z",
+{"event":"control_cycle","schema":1,"ts":"2026-11-01T06:30:00Z","unit":"C",
  "rooms":[{"id":"living","readings":[20.4,20.1],"temperature":20.25,"target":21.0,"demand":true}],
  "zones":[{"id":"ground","desired":"on","reported":"on","degraded":false}]}
 ```
 
-- Fields are pinned in L1: per room its readings, temperature, target and demand; per zone
-  its desired and reported relay state and whether it is degraded.
+- Fields are pinned in L1: the unit of every temperature in the event; per room its
+  readings, temperature, target and demand; per zone its desired and reported relay state
+  and whether it is degraded.
 - Never read by the control path. A logging failure must not stop or change control.
 - History is kept for at least a full heating season. The app only logs; keeping the history
   is the system's job, not the build's.

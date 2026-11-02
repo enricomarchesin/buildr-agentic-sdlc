@@ -106,8 +106,8 @@ a green app produced by an unauditable process is not the thing being sold here.
    with no spec change is eval churn: a weakened check. That is a finding, not maintenance.
 5. **Per-expectation reporting.** Pass/fail plus failure mode. No aggregate score as a
    headline, no cross-model percentages.
-6. **Repeat builds.** Every version produces k builds. Each expectation is reported as a pass
-   count out of k, for example 4/5. One build is never reported as a result.
+6. **Repeat builds.** Every version produces k = 3 builds. Each expectation is reported as a
+   pass count out of k, for example 2/3. One build is never reported as a result.
 7. **Verification set.** Expectations tagged `Verification set: yes` are reported on every
    version. The rest run on every build and are reported when they fail.
 8. **Hand-written and held out.** Expectations and verdicts are written by hand, and the
