@@ -21,10 +21,10 @@ and relays are reached through an MQTT broker.
   targets, nothing more.
 - C5: `heatctl` never changes the configuration of a device. It only sends the commands
   listed in section 5.
-- C6: for sensors and relays we initially use only Shelly devices that support control and
-  updates via MQTT messages. We might add other types of sensors in the future (Bluetooth,
-  Zigbee, ESPHome, etc.), but they will also be connected, directly or indirectly, to the
-  MQTT broker anyway.
+- C6: for relays we use Shelly devices that support control and updates via MQTT messages.
+  For sensors we use Shelly devices and Zigbee sensors that Zigbee2MQTT publishes on the same
+  broker. We might add other types of sensors in the future (Bluetooth, ESPHome, etc.), but
+  they will also be connected, directly or indirectly, to the MQTT broker anyway.
 
 - C7: **no saved state.** `heatctl` keeps no state across restarts. It writes nothing to
   disk: no database, no state file, no cache. Its only output is standard output (L1, L4). A local socket for the status operation
@@ -42,8 +42,9 @@ and relays are reached through an MQTT broker.
 - **Sensor**: one temperature reading channel on a device. A device can provide more than one.
 - **Relay**: one switch channel on a device. A device can provide more than one.
 - **Target**: the temperature a room should be at, fixed or from a weekly schedule.
-- **Unit**: °C or °F, set once in the configuration. Every temperature `heatctl` reads,
-  decides on, shows or logs is in that unit. It never converts between the two.
+- **Unit**: °C or °F, set once in the configuration. Every temperature `heatctl` decides on,
+  shows or logs is in that unit. Sensors report °C; with unit `F`, `heatctl` converts each
+  reading as it arrives, and converts nothing else.
 
 ## 4. Configuration
 
@@ -58,6 +59,7 @@ mqtt:
   client_id: heatctl                # optional, default heatctl
   username: ""                      # optional
   password: ""                      # optional
+  zigbee2mqtt_topic: zigbee2mqtt    # optional, default zigbee2mqtt: Zigbee2MQTT's base topic
 
 control:                            # every key optional, defaults shown
   cycle_interval: 60s
@@ -81,7 +83,7 @@ zones:
           - { from: "22:30", target: 18.0 }   # no days: every day
         sensors:
           - { device: shellyhtg3-84fce63a1b2c, component: 0 }
-          - { device: shellyplus1-a8032ab1c2d3, component: 100 }
+          - { zigbee: living-display }
       - id: hallway                 # no sensors: never votes
   - id: upstairs
     relay:
@@ -91,7 +93,7 @@ zones:
       - id: bedroom
         target: 19.0
         sensors:
-          - { device: shellyhtg3-84fce63a9f01, component: 0 }
+          - { zigbee: bedroom-display }
 ```
 
 Rules:
@@ -102,10 +104,12 @@ Rules:
 - Durations use Go duration syntax.
 - `device` is the device's MQTT topic prefix. `switch` and `component` are channel ids:
   integers, 0 or more.
+- A sensor is either a Shelly channel, `{ device, component }`, or a Zigbee sensor,
+  `{ zigbee: <name> }`, never both. `<name>` is the sensor's friendly name in Zigbee2MQTT.
 - The file is a hierarchy: each zone has exactly one relay and one or more rooms; each room
   has zero or more sensors. A room belongs to the zone it is listed under.
 - Zone ids are unique. Room ids are unique across the whole house, not only within a zone.
-- Two zones never share a relay channel. A sensor channel is listed under at most one room.
+- Two zones never share a relay channel. A sensor is listed under at most one room.
 - `sensors` may be omitted or empty.
 - A room with sensors has either `target` or `schedule`, not both. A room without sensors may
   have neither.
@@ -123,7 +127,8 @@ Rules:
 
 - I1: sensors and relays are reached only through the MQTT broker in the configuration.
   MQTT 3.1.1, QoS 0 or 1. Nothing `heatctl` publishes is retained, its last will included.
-- I2: the topics and payloads below are the devices' own interface. They are fixed.
+- I2: the topics and payloads below are the devices' own interface, and Zigbee2MQTT's.
+  They are fixed.
 
 All devices are Shelly Gen2 or later, with MQTT enabled and status notifications turned on.
 `<device>` is the device's topic prefix from the configuration.
@@ -137,11 +142,18 @@ All devices are Shelly Gen2 or later, with MQTT enabled and status notifications
 | status | `<device>/status/switch:<id>` | JSON; `output` is `true` when on |
 | availability | `<device>/online` | `true` or `false`; `false` is the broker's last will |
 
-**Temperature sensors** (for example Shelly H&T Gen3, or a probe on a Shelly Plus Add-on):
+**Shelly temperature sensors** (for example Shelly H&T Gen3, or a probe on a Shelly Plus Add-on):
 
 | Purpose | Topic | Payload |
 |---|---|---|
-| reading | `<device>/status/temperature:<id>` | JSON; `tC` is °C and `tF` is °F, each `null` when the device has no valid value; `errors` is present on a fault |
+| reading | `<device>/status/temperature:<id>` | JSON; `tC` is °C, `null` when the device has no valid value; `errors` is present on a fault; `tF` is ignored |
+
+**Zigbee sensors** (for example Shelly BLU H&T Display ZB), published by Zigbee2MQTT.
+`<base>` is `zigbee2mqtt_topic` from the configuration, `<name>` the sensor's friendly name:
+
+| Purpose | Topic | Payload |
+|---|---|---|
+| reading | `<base>/<name>` | JSON; `temperature` is °C. Other fields, such as `humidity`, `battery` or `linkquality`, are ignored |
 
 Battery sensors sleep between reports and may report only on change or every few minutes.
 They do not answer status requests.
@@ -152,14 +164,17 @@ Example payloads:
 {"id":0,"source":"timer","output":true,"temperature":{"tC":41.2,"tF":106.2}}
 {"id":0,"tC":20.4,"tF":68.7}
 {"id":100,"tC":null,"tF":null,"errors":["read"]}
+{"temperature":20.4,"humidity":48.2,"battery":95,"linkquality":120}
 ```
 
 Any other topic is ignored. A payload that cannot be parsed is ignored and logged.
 
 ## 6. Control behaviour
 
-- B1: **reading.** A sensor reading is the payload's field for the unit: `tC` for `C`, `tF`
-  for `F`. It is valid if that field is a number and `errors` is absent. A sensor is fresh
+- B1: **reading.** A sensor reading is the payload's temperature in °C: `tC` from a Shelly
+  sensor, `temperature` from a Zigbee sensor. It is valid if that field is a number and,
+  for a Shelly sensor, `errors` is absent. With unit `F`, each valid reading is converted to
+  °F as it arrives: °F = °C × 9/5 + 32. A sensor is fresh
   if its last valid reading is not older than `stale_after`. A retained sensor message
   delivered when `heatctl` subscribes is not a reading: its age is unknown, so it would be
   state from before the start (C7).
@@ -196,8 +211,8 @@ Any other topic is ignored. A payload that cannot be parsed is ignored and logge
 - R2: **broker loss.** `heatctl` keeps running, reconnects with backoff capped at 60 s, logs
   each disconnect and reconnect, and after reconnecting resubscribes and re-sends every
   relay's desired state.
-- R3: **bad input.** Malformed payloads, unknown topics, and readings outside −40 to 85 °C
-  (−40 to 185 °F) are ignored and logged. None of them stops `heatctl`.
+- R3: **bad input.** Malformed payloads, unknown topics, and readings outside −40 to 85 °C,
+  checked before any conversion, are ignored and logged. None of them stops `heatctl`.
 - R4: **start.** On start, `heatctl` knows nothing from earlier runs (C7). It requests the
   status of every relay and sends no relay command until `startup_grace` has passed or every
   room with sensors has a temperature, whichever comes first. No control cycle runs before
@@ -267,7 +282,8 @@ Numbers in the criteria use unit `C` and the defaults in section 4 unless stated
 ### F2 Sensor readings
 
 - F2.AC1: a room with readings 19.0 and 20.0 from two fresh sensors has temperature 19.5.
-- F2.AC2: a reading with `tC` null or with `errors` does not change the room's temperature.
+- F2.AC2: a reading whose temperature is not a number, or a Shelly reading with `errors`,
+  does not change the room's temperature.
 - F2.AC3: a sensor whose last valid reading is older than `stale_after` no longer counts.
 
 ### F3 Targets and schedules
@@ -290,8 +306,8 @@ Numbers in the criteria use unit `C` and the defaults in section 4 unless stated
 - F4.AC4: every sensor in a zone goes stale: the relay is commanded off and the zone shows as
   degraded in **status**.
 - F4.AC5: a room without sensors never changes its zone's decision.
-- F4.AC6: with unit `F`, target 68.0 and the default hysteresis, a reading of 66.9 turns the
-  zone's relay on, 68.9 keeps it on, and 69.0 turns it off.
+- F4.AC6: with unit `F`, target 68.0 and the default hysteresis, a reading of 19.4 °C turns
+  the zone's relay on, 20.5 °C keeps it on, and 20.6 °C turns it off.
 
 ### F5 Relay control
 
