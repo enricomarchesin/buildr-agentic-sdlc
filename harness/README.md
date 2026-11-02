@@ -21,6 +21,7 @@ harness/
   CHANGELOG.md          one row per version
   adr/                  000-template.md, 001-..., one per version
   run/                  current implementation: at H0 a wrapper around a vendor coding harness
+                        in a Docker Sandbox: build.sh, prompt.txt, allowlist.txt
 ```
 
 H0 has no history store and no run records: the vendor harness prints to stdout and that is
@@ -40,14 +41,23 @@ all we get. Directories are added here when a version needs them.
 ## Running it
 
 ```
-# placeholder, filled in from H0 onwards
-./run/build.sh spec/SPEC.md
+harness/run/build.sh [SPEC]
 ```
 
-The loop runs inside a container from H0: repo mounted read-write, no docker socket, and
-network only through an egress proxy with a domain allowlist. Nothing else on the host is
-reachable. H0 does not claim this is the right sandbox; the ADR records that it was adopted
-as a safe default, to be justified or replaced once the runs show what the agent touches.
+One run is one build. `build.sh` creates a fresh Docker Sandbox (`sbx`, one microVM per
+sandbox) with the claude agent and an empty repository holding only `SPEC.md`, gives it the
+network allowlist below and the model key, runs Claude Code headless with `prompt.txt`
+until it declares done, then archives the repository, Claude Code's output stream, the
+sandbox's network log and a `meta.json` with cost, turns and times, and removes the
+sandbox. `HEATCTL_*` variables at the top of the script set the model, the timeout, the
+archive and where the key comes from.
+
+The sandbox mounts the repository read-write and nothing else from the host. The agent has
+no route to the sandbox daemon, so it cannot change its own policy. The host's global
+sandbox policy is deny-all; the allowlist is added for each build's sandbox alone, and the
+run refuses to start if `github.com` or `example.com` is reachable from it. H0 does not
+claim this is the right sandbox; the ADR records that it was adopted as a safe default, to
+be justified or replaced once the runs show what the agent touches.
 
 ### Network allowlist
 
@@ -64,7 +74,7 @@ everything else:
 | .NET | `api.nuget.org` |
 | Ruby | `rubygems.org`, `index.rubygems.org` |
 | PHP | `repo.packagist.org` |
-| Model endpoint | the API the harness itself talks to, for example `api.anthropic.com` at H0 |
+| Model endpoint | the API the harness itself talks to, for example `api.anthropic.com` at H0. The sandbox's agent kit adds a few hosts of the vendor's own |
 
 Rules that go with it:
 
@@ -74,11 +84,14 @@ Rules that go with it:
 - **No OS package mirrors.** System packages, such as an MQTT broker from apt, are not
   reachable. A build that wants a broker for its own tests must get one through a language
   registry, or do without. Either is recorded, not helped.
-- **One credential.** The model API key is the only secret in the container, so the harness
-  can call the model. It is a dedicated key with a spend limit, used for nothing else. No
-  other credentials, no SSH keys, no registry tokens, so nothing can be published.
-- **Every request is logged.** The proxy log lists every domain and package fetched per build.
-  It goes into the run records, and the negative layer reads it: a build that tries
+- **One credential, outside the sandbox.** The model API key is the only secret a build
+  can use, and it never enters the sandbox: the sandbox proxy adds it to requests to the
+  model endpoint. It is a dedicated key with a spend limit, used for nothing else. No other
+  credentials, no SSH keys, no registry tokens, so nothing can be published. The run
+  refuses to start if any secret is shared with every sandbox.
+- **Every host is logged.** The sandbox's network log lists every host allowed or blocked
+  per build, with a count. Logs are taken before and after the build, so what the sandbox
+  does on its own at start is not counted. The negative layer reads it: a build that tries
   a closed domain is flagged.
 - **Verify with a dry run.** Before episode 1, fetch one package per ecosystem through the
   proxy. Registries change where they serve files from, and a redirect to an unlisted CDN

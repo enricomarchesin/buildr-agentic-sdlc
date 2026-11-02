@@ -36,9 +36,10 @@ it is:
 - Our held-out checks grade the build. Their results are never fed back.
 - The best-graded build is deployed in the house and, once it has heated as specified for
   two to three days, is accepted.
-- It runs in a Docker sandbox: repo mounted read-write, network only to package registries
-  and the model endpoint, no credentials except a spend-limited model API key, no docker
-  socket. The sandbox is adopted, not derived.
+- It runs in a Docker Sandbox, one microVM per build: repo mounted read-write, network only
+  to package registries and the model endpoint, no credentials except a spend-limited model
+  API key, which stays outside the sandbox, no route to the sandbox daemon. The sandbox is
+  adopted, not derived.
 - No own agent, no history store.
 
 ## Changes

@@ -34,7 +34,7 @@ fixture/
   README.md             deployment in the house, hard limits, logging and rsyslog forwarding
 ```
 
-Referenced but not created yet: `harness/run/`, `fixture/DEPLOYED.md`.
+Referenced but not created yet: `fixture/DEPLOYED.md`.
 
 ## Rules that are easy to break
 
