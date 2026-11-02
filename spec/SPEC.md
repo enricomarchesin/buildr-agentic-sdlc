@@ -159,9 +159,10 @@ Any other topic is ignored. A payload that cannot be parsed is ignored and logge
 ## 6. Control behaviour
 
 - B1: **reading.** A sensor reading is the payload's field for the unit: `tC` for `C`, `tF`
-  for `F`. It is valid if that field is a number and `errors` is absent. A sensor is fresh if its last valid reading is not older than `stale_after`. A
-  retained sensor message delivered when `heatctl` subscribes is not a reading: its age is
-  unknown, so it would be state from before the start (C7).
+  for `F`. It is valid if that field is a number and `errors` is absent. A sensor is fresh
+  if its last valid reading is not older than `stale_after`. A retained sensor message
+  delivered when `heatctl` subscribes is not a reading: its age is unknown, so it would be
+  state from before the start (C7).
 - B2: **room temperature** is the mean of its fresh sensors' last valid readings. A room
   with no fresh sensor has no temperature.
 - B3: **target.** A room with `target` always uses it. A room with `schedule` uses the entry
@@ -195,8 +196,8 @@ Any other topic is ignored. A payload that cannot be parsed is ignored and logge
 - R2: **broker loss.** `heatctl` keeps running, reconnects with backoff capped at 60 s, logs
   each disconnect and reconnect, and after reconnecting resubscribes and re-sends every
   relay's desired state.
-- R3: **bad input.** Malformed payloads, unknown topics, and readings outside −40 to 85 °C (−40 to 185 °F)
-  are ignored and logged. None of them stops `heatctl`.
+- R3: **bad input.** Malformed payloads, unknown topics, and readings outside −40 to 85 °C
+  (−40 to 185 °F) are ignored and logged. None of them stops `heatctl`.
 - R4: **start.** On start, `heatctl` knows nothing from earlier runs (C7). It requests the
   status of every relay and sends no relay command until `startup_grace` has passed or every
   room with sensors has a temperature, whichever comes first. No control cycle runs before
