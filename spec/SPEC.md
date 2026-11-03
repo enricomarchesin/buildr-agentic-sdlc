@@ -142,6 +142,13 @@ All devices are Shelly Gen2 or later, with MQTT enabled and status notifications
 | status | `<device>/status/switch:<id>` | JSON; `output` is `true` when on |
 | availability | `<device>/online` | `true` or `false`; `false` is the broker's last will |
 
+A relay publishes its status when its output changes, and may also publish it unasked, for
+example once a minute. A command that changes nothing, such as `off` to a relay that is off,
+gets no status in reply. A command sent while a relay is not connected is lost: the broker
+does not keep it for the relay. The broker keeps the last `<device>/online` message, and
+after the broker restarts that message may be stale, either way, until the relay
+reconnects.
+
 **Shelly temperature sensors** (for example Shelly H&T Gen3, or a probe on a Shelly Plus Add-on):
 
 | Purpose | Topic | Payload |
@@ -155,7 +162,8 @@ All devices are Shelly Gen2 or later, with MQTT enabled and status notifications
 |---|---|---|
 | reading | `<base>/<name>` | JSON; `temperature` is °C. Other fields, such as `humidity`, `battery` or `linkquality`, are ignored |
 
-Battery sensors sleep between reports and may report only on change or every few minutes.
+Battery sensors sleep between reports and may report only on change, with minutes or hours
+between reports.
 They do not answer status requests.
 
 Example payloads:
