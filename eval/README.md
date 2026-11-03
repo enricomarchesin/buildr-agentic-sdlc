@@ -75,9 +75,15 @@ The grading model and its version stay the same for the whole series and are nam
 001. They never move when the harness changes where inference runs, or that version would change
 two things at once.
 
-If a scenario depends on time of day or on durations, the check controls the clock from
-outside the build, for example with libfaketime, rather than adding a clock clause to the
-spec.
+If a scenario depends on the day or the time of day, the check controls local time from
+outside the build, rather than adding a clock clause to the spec: it installs a time zone
+of its own as the system's local zone, with the offset that puts local time where the
+scenario needs it. The clock itself is not moved, so durations stay real, and the build
+reads local time as it would in the house. The offset stays under 24 hours, since larger
+ones break common time libraries, so a scenario that needs a given weekday runs on a day
+when that weekday is within reach. Library tricks such as libfaketime do not work for every
+language: a Go program reads the clock without going through the C library. Durations are
+not faked either: the check shortens them in the configuration.
 
 **Validating the checks without a reference app.** Every check must fail on an empty build.
 It must also catch a few deliberately broken builds: one that never turns the heating on,
