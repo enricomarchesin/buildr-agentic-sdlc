@@ -1,0 +1,11 @@
+# Never reachable from a build: this repository and the project's site. One host per line,
+# optionally followed by a path. A path is denied with everything below it, with or without
+# .git, regardless of case and of Go's module-path escape (!x for X).
+buildr.zone
+*.buildr.zone
+github.com /enricomarchesin/buildr-agentic-sdlc
+api.github.com /repos/enricomarchesin/buildr-agentic-sdlc
+api.github.com /repositories/1441891053
+codeload.github.com /enricomarchesin/buildr-agentic-sdlc
+raw.githubusercontent.com /enricomarchesin/buildr-agentic-sdlc
+proxy.golang.org /github.com/enricomarchesin/buildr-agentic-sdlc

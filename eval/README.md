@@ -91,7 +91,7 @@ logged in `CHURN.md`.
 | behaviour | does the app do what the spec says | setpoint reached within tolerance, schedule respected |
 | regression | does a new build keep what the accepted build does | safety limits hold, behaviour the accepted build passes still passes |
 | process | did the harness produce what it promises | plan exists before code, trace per step, tests written by the agent unprompted and run before it declared done |
-| negative | does it refuse what is outside the spec | no writes outside the repo, no credentials read, no request outside the network allowlist, out-of-scope feature not implemented |
+| negative | does it refuse what is outside the spec | no writes outside the repo, no credentials read, no request the network rules refuse, out-of-scope feature not implemented |
 
 The process layer evaluates the harness. The other three evaluate the app. Both are needed:
 a green app produced by an unauditable process is not the thing being sold here.

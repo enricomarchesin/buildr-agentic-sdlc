@@ -21,7 +21,7 @@ harness/
   CHANGELOG.md          one row per version
   adr/                  000-template.md, 001-..., one per version
   run/                  current implementation: at H0 a wrapper around a vendor coding harness
-                        in a Docker Sandbox: build.sh, prompt.txt, allowlist.txt
+                        in a Docker Sandbox: build.sh, prompt.txt, allowlist.txt, denylist.txt
 ```
 
 H0 has no history store and no run records: the vendor harness prints to stdout and that is
@@ -46,56 +46,87 @@ harness/run/build.sh [SPEC]
 
 One run is one build. `build.sh` creates a fresh Docker Sandbox (`sbx`, one microVM per
 sandbox) with the claude agent and an empty repository holding only `SPEC.md`, gives it the
-network allowlist below and the model key, runs Claude Code headless with `prompt.txt`
-until it declares done, then archives the repository, Claude Code's output stream, the
-sandbox's network log and a `meta.json` with cost, turns and times, and removes the
-sandbox. `HEATCTL_*` variables at the top of the script set the model, the timeout, the
-archive and where the key comes from.
+network rules below and the model key, runs Claude Code headless with `prompt.txt` until it
+declares done, then archives the repository, Claude Code's output stream, the sandbox's
+network log and a `meta.json` with cost, turns and times, and removes the sandbox.
+`HEATCTL_*` variables at the top of the script set the model, the timeout, the archive and
+where the key comes from.
 
 The sandbox mounts the repository read-write and nothing else from the host. The agent has
-no route to the sandbox daemon, so it cannot change its own policy. The host's global
-sandbox policy is deny-all; the allowlist is added for each build's sandbox alone, and the
-run refuses to start if `github.com` or `example.com` is reachable from it. H0 does not
-claim this is the right sandbox; the ADR records that it was adopted as a safe default, to
-be justified or replaced once the runs show what the agent touches.
+no route to the sandbox daemon, so it cannot change its own policy. H0 does not claim this
+is the right sandbox; the ADR records that it was adopted as a safe default, to be justified
+or replaced once the runs show what the agent touches.
 
-### Network allowlist
+### Network
 
-The container has no route out except the proxy. The proxy allows these domains and refuses
-everything else:
+The rule: **a build may fetch anything it installs, reads nothing about this project, and
+never reaches the house.** Inside its microVM the agent may install what it likes, from
+language registries, OS packages, container images or release downloads. What it must not
+do is read this repository or the project's site, which describe how builds are graded and
+what earlier builds got wrong: that would credit a version with what it read. And it must
+never reach the house's network, where the real relays are.
 
-| Ecosystem | Domains |
+The sandbox has no route out except the proxy. The host's global policy is deny-all; for
+each build's sandbox alone, `build.sh` allows the hosts in `run/allowlist.txt` and denies
+those in `run/denylist.txt`. A deny wins over an allow.
+
+| Allowed | Hosts |
 |---|---|
-| Go | `proxy.golang.org`, `sum.golang.org` |
+| Go | `proxy.golang.org`, `sum.golang.org`, `storage.googleapis.com` (toolchain downloads) |
 | Python | `pypi.org`, `files.pythonhosted.org` |
 | Node | `registry.npmjs.org`, `registry.yarnpkg.com` |
-| Rust | `index.crates.io`, `static.crates.io`, `crates.io`, `static.rust-lang.org` |
+| Rust | `index.crates.io`, `static.crates.io`, `crates.io`, `static.rust-lang.org`, `sh.rustup.rs` |
 | Java and Kotlin | `repo.maven.apache.org`, `repo1.maven.org`, `plugins.gradle.org`, `services.gradle.org` |
 | .NET | `api.nuget.org` |
 | Ruby | `rubygems.org`, `index.rubygems.org` |
 | PHP | `repo.packagist.org` |
-| Model endpoint | the API the harness itself talks to, for example `api.anthropic.com` at H0. The sandbox's agent kit adds a few hosts of the vendor's own |
+| GitHub | `github.com`, `api.github.com`, `codeload.github.com`, `raw.githubusercontent.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com` |
+| Container images | `registry-1.docker.io`, `auth.docker.io`, `production.cloudflare.docker.com`, `production.cloudfront.docker.com`, `ghcr.io`, `pkg-containers.githubusercontent.com` |
+| OS packages | the image's apt sources: `ports.ubuntu.com`, `download.docker.com`, `cli.github.com` |
+| Model endpoint | the API the harness itself talks to, for example `api.anthropic.com` at H0 |
+
+| Denied | How |
+|---|---|
+| This repository | by path, on every host above that serves it: GitHub's web, API, archive and raw hosts, and the Go module proxy, which serves any public GitHub repository as a module. Matched without regard to case, with or without `.git`, and in Go's escaped form |
+| The project's site | the whole domain |
+| The agent kit's own hosts | every host the kit allows on its own that is not on the allowlist: its console, docs, updates, connectors and remote control |
+| Everything else | the general web, search engines, and every private address range, the house's included |
 
 Rules that go with it:
 
-- **Registries only, no code hosts.** `github.com` and other code hosts stay closed. Go uses
-  the module proxy with no direct fallback, so modules hosted on GitHub still resolve. A
-  build that needs something only a code host has fails, and that is a finding.
-- **No OS package mirrors.** System packages, such as an MQTT broker from apt, are not
-  reachable. A build that wants a broker for its own tests must get one through a language
-  registry, or do without. Either is recorded, not helped.
+- **No web search.** Claude Code's web search runs on the vendor's side, out of the proxy's
+  reach, so it is turned off (`--disallowedTools WebSearch`). Its fetch tool goes through
+  the proxy and stays.
+- **No MCP servers.** The kit connects every sandbox to an MCP gateway that the policy
+  cannot close. Claude Code starts with none (`--strict-mcp-config`), and the run refuses to
+  start if any MCP server is registered on the host, since the gateway would offer it.
 - **One credential, outside the sandbox.** The model API key is the only secret a build
   can use, and it never enters the sandbox: the sandbox proxy adds it to requests to the
   model endpoint. It is a dedicated key with a spend limit, used for nothing else. No other
   credentials, no SSH keys, no registry tokens, so nothing can be published. The run
   refuses to start if any secret is shared with every sandbox.
+- **Fail closed.** Before the build starts, the run checks that the controls are reachable
+  and that `example.com`, the private ranges, the kit's hosts and every denied path, in
+  other cases and escapes, are refused. If any check fails, there is no build.
 - **Every host is logged.** The sandbox's network log lists every host allowed or blocked
   per build, with a count. Logs are taken before and after the build, so what the sandbox
   does on its own at start is not counted. The negative layer reads it: a build that tries
-  a closed domain is flagged.
-- **Verify with a dry run.** Before episode 1, fetch one package per ecosystem through the
-  proxy. Registries change where they serve files from, and a redirect to an unlisted CDN
-  shows up as a refused request.
+  a closed host is flagged.
+- **Outside state is noise, recorded.** Anonymous pulls from Docker Hub are rate-limited,
+  and registries move. A build that fails on either is recorded as such, not retried until
+  it passes.
+
+### What the dry run found
+
+Run on 3 November 2026, from a sandbox set up exactly as a build's, with `sbx` v0.50.1:
+
+- One fetch per ecosystem, then a Mosquitto container pulled from Docker Hub and started,
+  an MQTT client installed from apt, another Go toolchain, the Gradle distribution, a
+  GitHub release, a clone and a Composer archive. All worked.
+- Registries redirect: `services.gradle.org` and Packagist archives to GitHub, Go toolchains
+  to `storage.googleapis.com`, Docker Hub layers to its CDNs. Each target is listed above.
+- This repository was refused by clone, by URL in other cases and by `go get`; the site and
+  the general web were refused.
 
 ## Gates
 

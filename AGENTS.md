@@ -27,7 +27,7 @@ spec/
 eval/
   README.md             expectation format, how hidden checks run, the four layers, rules
 harness/
-  README.md             what the harness is, the sandbox network allowlist, gates
+  README.md             what the harness is, the sandbox's network rules, gates
   CHANGELOG.md          one row per harness version, added when the version starts
   adr/000-template.md   template for the one ADR per version
 fixture/
