@@ -1,19 +1,25 @@
-Review the application in this repository against SPEC.md. You may read everything, build
-it, run its tests, run the program, and install or start anything you need to try it, such as
-an MQTT broker. Do not change any file in this repository and do not commit: put anything you
-create under /tmp.
+Test every clause and every acceptance criterion of SPEC.md against the application in this
+repository. How you test each one is up to you. You may build and run the program and use
+anything this sandbox offers. Do not change any file in this repository and
+do not commit: put anything you create under /tmp.
 
-List every way the implementation fails SPEC.md, and give each issue a severity:
+A requirement you could not test is not met. Report it as an issue, with the severity it
+would have if it were broken.
+
+Give each issue a severity:
 
 - high: the program does not build or run, a feature in SPEC.md is missing, or a requirement
   is broken: the program does something SPEC.md forbids, or fails to do something it requires.
 - medium: a requirement is met only in part, or only in the common case.
 - low: anything else worth fixing, such as unclear documentation or a missing error message.
 
-In each issue's evidence, say whether you saw the failure happen or read it in the code.
+For each issue, say whether the requirement is broken or could not be tested, and give your
+evidence: what you did and what you saw.
 
 Write the result to /tmp/heatctl-review.json, as JSON and nothing else:
 
-{"issues": [{"id": "R1", "severity": "high", "clause": "B9", "file": "main.go", "summary": "...", "evidence": "..."}]}
+{"issues": [{"id": "R1", "severity": "high", "status": "broken", "clause": "B9", "file": "main.go", "summary": "...", "evidence": "..."}],
+ "confirmed": ["C1", "B1", "F1.AC1"]}
 
-An empty list means you found no issue.
+"status" is "broken" or "not tested". "confirmed" lists every clause and criterion you
+tested and found met. An empty issues list means the application adheres to SPEC.md in full.

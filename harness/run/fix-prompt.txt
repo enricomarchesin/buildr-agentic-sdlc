@@ -1,5 +1,7 @@
-A review of the application in this repository against SPEC.md found the issues below. Fix
-every issue whose severity is high, and only those: leave medium and low issues as they are.
-Work until every high issue is fixed.
+A review of the application in this repository against SPEC.md found the issues below. Deal
+with every issue whose severity is high, and only those: leave medium and low issues as they
+are. An issue marked "broken" is a requirement the application fails; an issue marked "not
+tested" is one the reviewer could not test, so make sure the application meets it, in a way
+the next review can test. Work until every high issue is dealt with.
 
 The review:

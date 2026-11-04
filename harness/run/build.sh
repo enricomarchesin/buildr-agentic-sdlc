@@ -21,6 +21,9 @@
 #   HEATCTL_TIMEOUT         seconds before the build is stopped, default 14400
 #   HEATCTL_PULL            sandbox image pull policy, default never: every build of a version
 #                           runs on the same image. Use missing for the very first build.
+#   HEATCTL_FROM_REPO       start from an earlier run's repository instead of an empty one, and
+#                           skip the build session: for trying the review and fix rounds again.
+#                           Its committed history is copied; its SPEC.md must match SPEC.
 #
 # Settings that describe the operator's own network can live in a file outside this repository,
 # read first if it exists: HEATCTL_ENV, default ~/.config/heatctl/build.env.
@@ -68,11 +71,19 @@ for c in custom:
 echo "$global" | grep -q ' ?$' && die "a global sbx secret goes to hosts this script does not know: $(echo "$global" | awk '$2=="?"{print $1}')"
 sbx mcp ls 2>/dev/null | grep -q 'No MCP servers registered' || die "MCP servers are registered with sbx; remove them first"
 
-mkdir -p "$repo"
-cp "$spec" "$repo/SPEC.md"
-git -C "$repo" init -q
-git -C "$repo" -c user.name=harness -c user.email=harness@localhost add SPEC.md
-git -C "$repo" -c user.name=harness -c user.email=harness@localhost commit -qm "spec"
+from=${HEATCTL_FROM_REPO:-}
+if [ -n "$from" ]; then
+  mkdir -p "$dir"
+  git clone -q "$from" "$repo" && git -C "$repo" remote remove origin
+  cmp -s "$spec" "$repo/SPEC.md" || die "SPEC.md in $from differs from $spec"
+  echo "$from" >"$dir/from.txt"
+else
+  mkdir -p "$repo"
+  cp "$spec" "$repo/SPEC.md"
+  git -C "$repo" init -q
+  git -C "$repo" -c user.name=harness -c user.email=harness@localhost add SPEC.md
+  git -C "$repo" -c user.name=harness -c user.email=harness@localhost commit -qm "spec"
+fi
 
 t0=$(now)
 # The build key never enters the sandbox: it sees a placeholder in ANTHROPIC_API_KEY, which the
@@ -173,7 +184,8 @@ snapshot() {  # the working tree as a git tree, untracked files included, ignore
   GIT_INDEX_FILE="$dir/.snapshot-index" git -C "$repo" write-tree
   rm -f "$dir/.snapshot-index"
 }
-status=0; session build "$(cat "$here/prompt.txt")" || status=$?
+status=0
+[ -n "$from" ] || session build "$(cat "$here/prompt.txt")" || status=$?
 
 # Review, and fix the high issues, until none is high. A reviewer that changes the repository
 # is recorded and its changes undone: the review must leave the build as it found it.
@@ -240,7 +252,10 @@ for n in names:
     if n.startswith("review-"):
         try:
             issues = json.load(open(os.path.join(d, n + ".json")))["issues"]
-            reviews.append({"name": n, **{s: sum(1 for i in issues if str(i.get("severity", "")).lower() == s) for s in ("high", "medium", "low")}})
+            confirmed = json.load(open(os.path.join(d, n + ".json"))).get("confirmed", [])
+            reviews.append({"name": n, **{s: sum(1 for i in issues if str(i.get("severity", "")).lower() == s) for s in ("high", "medium", "low")},
+                            "not_tested": sum(1 for i in issues if str(i.get("status", "")).lower() in ("not tested", "not confirmed")),
+                            "confirmed": len(confirmed)})
         except Exception:
             reviews.append({"name": n, "unreadable": True})
 def total(k):
@@ -257,6 +272,7 @@ version = next((l.split(":", 1)[1].strip() for l in specbytes.decode().splitline
 repo = os.path.join(d, "repo")
 meta = {
     "run_id": run, "harness": "H0", "model": model, "small_model": small_model,
+    "from_repo": open(os.path.join(d, "from.txt")).read().strip() if os.path.exists(os.path.join(d, "from.txt")) else None,
     "spec": {"version": version, "sha256": hashlib.sha256(specbytes).hexdigest()},
     "claude_code": open(os.path.join(d, "claude-version.txt")).read().strip(),
     "sbx": sh("sbx", "version").splitlines()[0] if sh("sbx", "version") else None,

@@ -151,13 +151,16 @@ Gate order is fixed per version and recorded in the ADR. At H0:
 
 1. **Build.** The whole spec and an empty repo go to the vendor harness, which builds and
    tests as it sees fit until it declares done (`run/prompt.txt`).
-2. **Review.** A fresh session of the same harness and model reviews the build against the
-   spec (`run/review-prompt.txt`). It may build, test, run the program and start whatever it
-   needs, such as an MQTT broker, but must not change the repository; if it does, its
-   changes are undone and recorded. It lists every issue with a severity, high, medium or
-   low, the clause, the file and its evidence.
-3. **Fix.** If any issue is high, a fresh session gets the whole review and fixes the high
-   issues only (`run/fix-prompt.txt`). Then back to review.
+2. **Review.** A fresh session of the same harness and model tests every clause and every
+   acceptance criterion of the spec against the build (`run/review-prompt.txt`). How it
+   tests each one is up to it. A requirement it cannot test is not met, and counts as an
+   issue with the severity it would have if broken. It must not change the repository; if it
+   does, its changes are undone and recorded. It lists every issue with a severity, high,
+   medium or low, whether it is broken or not tested, the clause, the file and its evidence,
+   and every clause it found met.
+3. **Fix.** If any issue is high, a fresh session gets the whole review and deals with the
+   high issues only (`run/fix-prompt.txt`): it fixes what is broken, and makes sure of what
+   could not be tested, in a way the next review can test. Then back to review.
 4. **Stop** when no issue is high, after 3 fix rounds, or earlier if a round does not reduce
    the high issues. Medium and low issues are recorded, never fixed.
 5. **Grade.** The hidden checks grade the result.
