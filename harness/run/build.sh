@@ -43,10 +43,26 @@ dir=${HEATCTL_BUILDS:-$HOME/heatctl-builds}/$run
 repo=$dir/repo
 now() { python3 -c 'import time; print(f"{time.time():.3f}")'; }
 
-# The only credential a build may see is the model key: no secret may be global. The kit's MCP
-# gateway is reachable from every sandbox and no policy closes it; it serves only the MCP
-# servers registered on this host, so none may be.
-sbx secret ls 2>/dev/null | grep -q '(global)' && die "global sbx secrets exist; scope them to their sandboxes first"
+# The only credential a build may use is the build key. A secret shared with every sandbox is
+# tolerated only if every host it is sent to is refused from the build's sandbox, which is
+# checked once the sandbox exists; a global secret whose hosts are not known stops the run.
+# The kit's MCP gateway is reachable from every sandbox and no policy closes it; it serves only
+# the MCP servers registered on this host, so none may be.
+global=$(sbx secret ls --json | python3 -c '
+import sys, json
+known = {"anthropic": ["api.anthropic.com"], "openai": ["api.openai.com", "auth.openai.com", "chatgpt.com"],
+         "github": ["github.com", "api.github.com"]}
+j = json.load(sys.stdin)
+custom = [c for c in j.get("custom_secrets", []) if c.get("scope") == "global"]
+by_env = {c.get("env"): c.get("targets", []) for c in custom}
+for s in j.get("secrets", []):
+    if s.get("scope") == "global":
+        for h in known.get(s["name"]) or by_env.get(s["name"]) or ["?"]:
+            print(s["name"], h)
+for c in custom:
+    for h in c.get("targets", []):
+        print(c.get("env"), h)')
+echo "$global" | grep -q ' ?$' && die "a global sbx secret goes to hosts this script does not know: $(echo "$global" | awk '$2=="?"{print $1}')"
 sbx mcp ls 2>/dev/null | grep -q 'No MCP servers registered' || die "MCP servers are registered with sbx; remove them first"
 
 mkdir -p "$repo"
@@ -78,6 +94,7 @@ hosts = {r.split(":")[0] for x in json.load(sys.stdin).get("rules", [])
 print(",".join(sorted(hosts - listed)))' "$here/allowlist.txt" "$run")
 [ -z "$kit" ] || sbx policy deny network --sandbox "$run" "$kit" >/dev/null 2>&1
 echo "$kit" | tr , '\n' >"$dir/kit-denied.txt"
+echo "$global" | sed '/^$/d' >"$dir/global-secrets.txt"
 
 # Never reachable: this repository and the project's site, wherever a build could fetch
 # them from (denylist.txt). Deny rules win over allow rules.
@@ -100,7 +117,7 @@ allowed() {
     | python3 -c 'import sys,json; sys.exit(0 if json.load(sys.stdin)["allowed"] else 1)'
 }
 for h in example.com 10.0.0.1 172.16.0.1 192.168.1.1 169.254.169.254 api.anthropic.com \
-  "$model_host:22" $must_not_reach $(echo "$kit" | tr , ' '); do
+  "$model_host:22" $must_not_reach $(echo "$kit" | tr , ' ') $(echo "$global" | awk '{print $2}' | sort -u); do
   allowed "$h" && die "$h is reachable"
 done
 allowed "$model_host:$model_port" || die "the model proxy $model_host:$model_port is not reachable"

@@ -114,8 +114,9 @@ Rules that go with it:
   which the sandbox proxy swaps for the key on requests to the model proxy. The key is used
   for builds only, has a budget generous enough never to stop a normal build, and cannot
   reach the proxy's admin routes. No other credentials, no SSH keys, no registry tokens, so
-  nothing can be published. The run refuses to start if any secret is shared with every
-  sandbox.
+  nothing can be published. A secret the operator shares with every sandbox is tolerated
+  only if each host it is sent to is refused from the build's sandbox, checked before every
+  build; a shared secret whose hosts the script does not know stops the run.
 - **Fail closed.** Before the build starts, the run checks that the controls and the model
   proxy are reachable; that `example.com`, the private ranges, the kit's hosts, the proxy
   host's other ports, the addresses the operator lists as never to be reached (the house's
