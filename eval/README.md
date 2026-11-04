@@ -71,8 +71,9 @@ hidden from the agent.
 4. **Outcome.** One of: pass; fail-behaviour, the operator did it and the state is wrong;
    fail-docs, the operator could not work out how from the README, or the README's commands
    fail where the program's help gives working ones; grader error.
-5. **Repeats.** Each check runs three times per build. Agreement between the runs is
-   recorded, so grader noise is not mistaken for build noise.
+5. **Repeats.** Each check runs three times per build. The build's outcome is the one most
+   runs gave. Agreement between the runs is recorded, so grader noise is not mistaken for
+   build noise.
 
 The grading model and its version stay the same for the whole series and are named in ADR
 001. They never move when the harness changes where inference runs, or that version would change
