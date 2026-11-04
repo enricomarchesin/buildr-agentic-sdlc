@@ -83,8 +83,10 @@ outside the build, rather than adding a clock clause to the spec: it installs a 
 of its own as the system's local zone, with the offset that puts local time where the
 scenario needs it. The clock itself is not moved, so durations stay real, and the build
 reads local time as it would in the house. The offset stays under 24 hours, since larger
-ones break common time libraries, so a scenario that needs a given weekday runs on a day
-when that weekday is within reach. Library tricks such as libfaketime do not work for every
+ones break common time libraries, so the date stays within a day of the real one. A
+scenario that needs a given weekday renames the days in its configuration instead, so that
+the real date plays it: a schedule for Sunday and Monday becomes one for any two days in a
+row, which the spec treats alike. Library tricks such as libfaketime do not work for every
 language: a Go program reads the clock without going through the C library. Durations are
 not faked either: the check shortens them in the configuration.
 
