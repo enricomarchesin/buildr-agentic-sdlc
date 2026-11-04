@@ -1,8 +1,8 @@
 #!/bin/sh
 # H0: one build. The whole spec and an empty repository go into a fresh Docker sandbox, Claude
 # Code builds until it declares done, then a review session lists the issues by severity and,
-# while any is high, a fix session fixes the high ones and another review follows: at most 3
-# fix rounds, fewer if a round does not reduce the high issues. Everything the wrapper can see
+# while any is high, a fix session fixes the high ones and another review follows: at most 5
+# fix rounds. Every review is a fresh session that sees no earlier review. Everything the wrapper can see
 # is archived. The sandbox may install from anywhere on allowlist.txt, and never reaches
 # denylist.txt.
 #
@@ -188,8 +188,9 @@ status=0
 [ -n "$from" ] || session build "$(cat "$here/prompt.txt")" || status=$?
 
 # Review, and fix the high issues, until none is high. A reviewer that changes the repository
-# is recorded and its changes undone: the review must leave the build as it found it.
-review=0; previous=; stop=
+# is recorded, its changes kept as a patch in the archive, and undone: the review must leave
+# the build as it found it.
+review=0; stop=
 while [ -z "$stop" ]; do
   review=$((review + 1))
   head=$(git -C "$repo" rev-parse HEAD); before=$(snapshot)
@@ -199,6 +200,8 @@ while [ -z "$stop" ]; do
   after=$(snapshot)
   if [ "$(git -C "$repo" rev-parse HEAD)" != "$head" ] || [ "$after" != "$before" ]; then
     echo "review-$review" >>"$dir/review-changed-repo.txt"
+    { git -C "$repo" log --format='commit %h %s' "$head..HEAD"; git -C "$repo" diff "$before" "$after"; } \
+      >"$dir/review-$review-changes.patch" 2>&1
     git -C "$repo" reset -q "$head"
     git -C "$repo" diff --name-only --diff-filter=A "$before" "$after" | (cd "$repo" && xargs rm -f --)
     git -C "$repo" checkout -q "$before" -- . && git -C "$repo" reset -q
@@ -213,11 +216,9 @@ except Exception:
   if [ -f "$dir/timeout" ]; then stop="time is up"
   elif [ "$high" -lt 0 ]; then stop="review $review wrote no readable result"
   elif [ "$high" -eq 0 ]; then stop="no high issues"
-  elif [ "$review" -gt 3 ]; then stop="3 fix rounds done"
-  elif [ -n "$previous" ] && [ "$high" -ge "$previous" ]; then stop="fix round $((review - 1)) did not reduce the high issues"
+  elif [ "$review" -gt 5 ]; then stop="5 fix rounds done"
   else
     session "fix-$review" "$(cat "$here/fix-prompt.txt"; echo; cat "$dir/review-$review.json")" || true
-    previous=$high
   fi
 done
 echo "$stop" >"$dir/stop.txt"

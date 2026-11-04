@@ -153,16 +153,17 @@ Gate order is fixed per version and recorded in the ADR. At H0:
    tests as it sees fit until it declares done (`run/prompt.txt`).
 2. **Review.** A fresh session of the same harness and model tests every clause and every
    acceptance criterion of the spec against the build (`run/review-prompt.txt`). How it
-   tests each one is up to it. A requirement it cannot test is not met, and counts as an
-   issue with the severity it would have if broken. It must not change the repository; if it
+   tests each one is up to it; it may simulate the devices, as long as they behave as the
+   spec describes them. A requirement that is not implemented, or that it cannot test, is a
+   high issue; the prompt defines each severity with examples. It must not change the repository; if it
    does, its changes are undone and recorded. It lists every issue with a severity, high,
    medium or low, whether it is broken or not tested, the clause, the file and its evidence,
    and every clause it found met.
 3. **Fix.** If any issue is high, a fresh session gets the whole review and deals with the
    high issues only (`run/fix-prompt.txt`): it fixes what is broken, and makes sure of what
    could not be tested, in a way the next review can test. Then back to review.
-4. **Stop** when no issue is high, after 3 fix rounds, or earlier if a round does not reduce
-   the high issues. Medium and low issues are recorded, never fixed.
+4. **Stop** when no issue is high, or after 5 fix rounds. Every review is a fresh session
+   that sees no earlier review, so their counts are not compared. Medium and low issues are recorded, never fixed.
 5. **Grade.** The hidden checks grade the result.
 
 The reviewer sees the spec and the code, never the hidden checks or their results, which are

@@ -35,7 +35,7 @@ it is:
   it decides to, unprompted, until it declares done.
 - A fresh Claude Code session, same model, reviews the build against the spec and lists the
   issues by severity. While any is high, another session fixes the high ones and the review
-  runs again: at most 3 fix rounds. Medium and low issues are recorded, never fixed.
+  runs again: at most 5 fix rounds. Medium and low issues are recorded, never fixed.
 - Our held-out checks grade the build. Their results are never fed back.
 - The best-graded build is deployed in the house and, once it has heated as specified for
   two to three days, is accepted.
