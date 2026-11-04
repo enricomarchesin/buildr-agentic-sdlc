@@ -5,26 +5,43 @@
 #
 #   harness/run/build.sh [SPEC]        default: spec/SPEC.md in this repository
 #
-#   HEATCTL_BUILDS       archive root, default ~/heatctl-builds
-#   HEATCTL_MODEL        default claude-sonnet-5-5
-#   HEATCTL_TIMEOUT      seconds before the build is stopped, default 14400
-#   HEATCTL_KEY_COMMAND  host command printing the spend-limited model API key; default reads
-#                        the macOS Keychain item heatctl-h0-anthropic
-#   HEATCTL_PULL         sandbox image pull policy, default never: every build of a version
-#                        runs on the same image. Use missing for the very first build.
+#   HEATCTL_MODEL_URL       required: base URL of the model proxy, http://host:port. Claude Code
+#                           talks to it in Anthropic's format; it is the only private address
+#                           a build reaches, by exact host and port
+#   HEATCTL_MODEL           default claude-sonnet-5-5, as the proxy names it
+#   HEATCTL_SMALL_MODEL     the model Claude Code uses for background tasks, default HEATCTL_MODEL
+#   HEATCTL_KEY_COMMAND     host command printing the build key for the proxy; default reads the
+#                           macOS Keychain item heatctl-build
+#   HEATCTL_MUST_NOT_REACH  host:port pairs, space-separated, that must be refused, such as the
+#                           house's broker; kept out of this file
+#   HEATCTL_BUILDS          archive root, default ~/heatctl-builds
+#   HEATCTL_TIMEOUT         seconds before the build is stopped, default 14400
+#   HEATCTL_PULL            sandbox image pull policy, default never: every build of a version
+#                           runs on the same image. Use missing for the very first build.
+#
+# Settings that describe the operator's own network can live in a file outside this repository,
+# read first if it exists: HEATCTL_ENV, default ~/.config/heatctl/build.env.
 set -eu
+die() { echo "build.sh: $*" >&2; exit 1; }
+env_file=${HEATCTL_ENV:-$HOME/.config/heatctl/build.env}
+[ ! -f "$env_file" ] || . "$env_file"
 here=$(cd "$(dirname "$0")" && pwd)
 spec=${1:-$here/../../spec/SPEC.md}
+model_url=${HEATCTL_MODEL_URL:?set HEATCTL_MODEL_URL to the model proxy, http://host:port}
 model=${HEATCTL_MODEL:-claude-sonnet-5-5}
+small_model=${HEATCTL_SMALL_MODEL:-$model}
 timeout=${HEATCTL_TIMEOUT:-14400}
-key_command=${HEATCTL_KEY_COMMAND:-/usr/bin/security find-generic-password -a $USER -s heatctl-h0-anthropic -w}
+key_command=${HEATCTL_KEY_COMMAND:-/usr/bin/security find-generic-password -a $USER -s heatctl-build -w}
+must_not_reach=${HEATCTL_MUST_NOT_REACH:-}
 export SBX_NO_TELEMETRY=1
+model_host=$(python3 -c 'import sys,urllib.parse as u; print(u.urlsplit(sys.argv[1]).hostname or "")' "$model_url")
+model_port=$(python3 -c 'import sys,urllib.parse as u; p=u.urlsplit(sys.argv[1]); print(p.port or {"http":80,"https":443}[p.scheme])' "$model_url")
+[ -n "$model_host" ] || die "HEATCTL_MODEL_URL has no host: $model_url"
 
 run=h0-$(date -u +%Y%m%dT%H%M%SZ)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
 dir=${HEATCTL_BUILDS:-$HOME/heatctl-builds}/$run
 repo=$dir/repo
 now() { python3 -c 'import time; print(f"{time.time():.3f}")'; }
-die() { echo "build.sh: $*" >&2; exit 1; }
 
 # The only credential a build may see is the model key: no secret may be global. The kit's MCP
 # gateway is reachable from every sandbox and no policy closes it; it serves only the MCP
@@ -39,12 +56,16 @@ git -C "$repo" -c user.name=harness -c user.email=harness@localhost add SPEC.md
 git -C "$repo" -c user.name=harness -c user.email=harness@localhost commit -qm "spec"
 
 t0=$(now)
-# The kit wires the key into Claude Code only if it exists when the sandbox is created.
-trap 'sbx rm -f "$run" >/dev/null 2>&1; sbx secret rm anthropic --sandbox "$run" -f >/dev/null 2>&1 || true' EXIT
-sbx secret set anthropic --sandbox "$run" --command "$key_command" >/dev/null 2>&1 \
+# The build key never enters the sandbox: it sees a placeholder in ANTHROPIC_API_KEY, which the
+# sandbox proxy swaps for the key on requests to the model proxy. Scoped to this sandbox and set
+# before it is created, so the variable exists from the start.
+placeholder=heatctl-build-$run
+trap 'sbx rm -f "$run" >/dev/null 2>&1; sbx secret rm --placeholder "$placeholder" -f >/dev/null 2>&1 || true' EXIT
+sbx secret set-custom --sandbox "$run" --host "$model_host" --env ANTHROPIC_API_KEY \
+  --placeholder "$placeholder" --command "$key_command" >/dev/null 2>&1 \
   || die "the key command failed: $key_command"
 sbx create --name "$run" --pull "${HEATCTL_PULL:-never}" claude "$repo" >"$dir/sbx-create.log" 2>&1
-sbx policy allow network --sandbox "$run" "$(paste -s -d, - <"$here/allowlist.txt")" >/dev/null
+sbx policy allow network --sandbox "$run" "$(paste -s -d, - <"$here/allowlist.txt"),$model_host:$model_port" >/dev/null
 
 # The agent kit allows hosts of its own on every sandbox it creates. Deny the ones that are
 # not on the allowlist, so the build reaches the allowlist and nothing else.
@@ -78,12 +99,14 @@ allowed() {
   sbx policy check network --sandbox "$run" --json "$1" \
     | python3 -c 'import sys,json; sys.exit(0 if json.load(sys.stdin)["allowed"] else 1)'
 }
-for h in example.com 10.0.0.1 172.16.0.1 192.168.1.1 169.254.169.254 $(echo "$kit" | tr , ' '); do
+for h in example.com 10.0.0.1 172.16.0.1 192.168.1.1 169.254.169.254 api.anthropic.com \
+  "$model_host:22" $must_not_reach $(echo "$kit" | tr , ' '); do
   allowed "$h" && die "$h is reachable"
 done
+allowed "$model_host:$model_port" || die "the model proxy $model_host:$model_port is not reachable"
 # Path rules are only enforced on a live request, so the rest is checked from inside: every
 # denylist entry, also in other cases and escapes, must get 403, and the two controls must not.
-controls="https://proxy.golang.org/github.com/eclipse/paho.golang/@v/list https://github.com/eclipse/paho.golang"
+controls="https://proxy.golang.org/github.com/eclipse/paho.golang/@v/list https://github.com/eclipse/paho.golang $model_url/health/liveliness"
 denied=$(grep -v '^#' "$here/denylist.txt" | python3 -c '
 import sys
 for line in sys.stdin:
@@ -103,13 +126,19 @@ print("\n".join(bad), file=sys.stderr)
 sys.exit(1 if bad else 0)
 EOF
 
+# The build key reaches the model, and nothing it can do on the proxy goes beyond that.
+admin=$(sbx exec -e "U=$model_url" "$run" sh -c 'curl -s -m 20 -o /dev/null -w "%{http_code}" -X POST "$U/key/generate" -H "Authorization: Bearer $ANTHROPIC_API_KEY" -H "content-type: application/json" -d "{}"' 2>/dev/null)
+case $admin in 401|403) ;; *) die "the build key can reach the proxy's admin routes (HTTP $admin)";; esac
+
 sbx exec "$run" claude --version >"$dir/claude-version.txt" 2>&1
 sbx policy log "$run" --json >"$dir/network-before.json"
 t1=$(now)
 
-sbx exec -e DISABLE_AUTOUPDATER=1 -e DISABLE_TELEMETRY=1 "$run" \
+sbx exec -e DISABLE_AUTOUPDATER=1 -e DISABLE_TELEMETRY=1 -e ANTHROPIC_BASE_URL="$model_url" \
+  -e ANTHROPIC_DEFAULT_HAIKU_MODEL="$small_model" -e "ANTHROPIC_CUSTOM_HEADERS=x-litellm-tags: heatctl,harness=H0,run=$run" "$run" \
   claude -p "$(cat "$here/prompt.txt")" --model "$model" --output-format stream-json --verbose \
-  --dangerously-skip-permissions --strict-mcp-config --disallowedTools WebSearch >"$dir/claude.jsonl" 2>"$dir/claude.stderr" &
+  --dangerously-skip-permissions --strict-mcp-config --disallowedTools WebSearch \
+  </dev/null >"$dir/claude.jsonl" 2>"$dir/claude.stderr" &
 pid=$!
 ( sleep "$timeout" && sbx stop "$run" && echo timeout >"$dir/timeout" ) >/dev/null 2>&1 &
 watchdog=$!
@@ -119,13 +148,13 @@ t2=$(now)
 
 sbx policy log "$run" --json >"$dir/network-after.json"
 sbx rm -f "$run" >/dev/null
-sbx secret rm anthropic --sandbox "$run" -f >/dev/null 2>&1 || true
+sbx secret rm --placeholder "$placeholder" -f >/dev/null 2>&1 || true
 trap - EXIT
 t3=$(now)
 
-python3 - "$dir" "$run" "$spec" "$model" "$status" "$t0" "$t1" "$t2" "$t3" <<'EOF'
+python3 - "$dir" "$run" "$spec" "$model" "$status" "$t0" "$t1" "$t2" "$t3" "$small_model" <<'EOF'
 import hashlib, json, os, subprocess, sys
-d, run, spec, model, status, t0, t1, t2, t3 = sys.argv[1:]
+d, run, spec, model, status, t0, t1, t2, t3, small_model = sys.argv[1:]
 t0, t1, t2, t3 = map(float, (t0, t1, t2, t3))
 def sh(*a):
     return subprocess.run(a, capture_output=True, text=True).stdout.strip()
@@ -146,7 +175,7 @@ specbytes = open(spec, "rb").read()
 version = next((l.split(":", 1)[1].strip() for l in specbytes.decode().splitlines() if l.startswith("Spec version:")), None)
 repo = os.path.join(d, "repo")
 meta = {
-    "run_id": run, "harness": "H0", "model": model,
+    "run_id": run, "harness": "H0", "model": model, "small_model": small_model,
     "spec": {"version": version, "sha256": hashlib.sha256(specbytes).hexdigest()},
     "claude_code": open(os.path.join(d, "claude-version.txt")).read().strip(),
     "sbx": sh("sbx", "version").splitlines()[0] if sh("sbx", "version") else None,

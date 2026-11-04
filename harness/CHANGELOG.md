@@ -37,10 +37,12 @@ it is:
 - The best-graded build is deployed in the house and, once it has heated as specified for
   two to three days, is accepted.
 - It runs in a Docker Sandbox, one microVM per build: repo mounted read-write, network to
-  what it installs from and the model endpoint but never to this repository, the project's
-  site or the house, no web search, no credentials except a spend-limited model API key,
-  which stays outside the sandbox, no route to the sandbox daemon. The sandbox is
+  what it installs from and the model proxy but never to this repository, the project's site
+  or the house, no web search, no credentials except a budgeted build key for the model
+  proxy, which stays outside the sandbox, no route to the sandbox daemon. The sandbox is
   adopted, not derived.
+- Claude Code reaches the model through a LiteLLM proxy on the operator's network, which
+  logs every call and its cost.
 - No own agent, no history store.
 
 ## Changes

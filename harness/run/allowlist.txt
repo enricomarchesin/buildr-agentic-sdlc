@@ -33,4 +33,3 @@ production.cloudfront.docker.com
 ports.ubuntu.com
 download.docker.com
 cli.github.com
-api.anthropic.com

@@ -46,11 +46,20 @@ harness/run/build.sh [SPEC]
 
 One run is one build. `build.sh` creates a fresh Docker Sandbox (`sbx`, one microVM per
 sandbox) with the claude agent and an empty repository holding only `SPEC.md`, gives it the
-network rules below and the model key, runs Claude Code headless with `prompt.txt` until it
+network rules below and the build key, runs Claude Code headless with `prompt.txt` until it
 declares done, then archives the repository, Claude Code's output stream, the sandbox's
 network log and a `meta.json` with cost, turns and times, and removes the sandbox.
-`HEATCTL_*` variables at the top of the script set the model, the timeout, the archive and
-where the key comes from.
+`HEATCTL_*` variables at the top of the script set the model proxy, the model, the timeout,
+the archive and where the key comes from. Those that describe the operator's own network,
+such as the proxy's address, can live in a file outside the repository,
+`~/.config/heatctl/build.env`.
+
+**The model proxy.** Claude Code does not call a model vendor directly. It talks, in
+Anthropic's format, to a LiteLLM proxy on the operator's network (`HEATCTL_MODEL_URL`),
+which forwards to whichever provider serves the model. Every version uses the same proxy and
+the same build key, so a version that changes the model changes only its name. The proxy
+logs every call with its cost, tagged with the run id, which gives each build's model
+spend.
 
 The sandbox mounts the repository read-write and nothing else from the host. The agent has
 no route to the sandbox daemon, so it cannot change its own policy. H0 does not claim this
@@ -83,13 +92,13 @@ those in `run/denylist.txt`. A deny wins over an allow.
 | GitHub | `github.com`, `api.github.com`, `codeload.github.com`, `raw.githubusercontent.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com` |
 | Container images | `registry-1.docker.io`, `auth.docker.io`, `production.cloudflare.docker.com`, `production.cloudfront.docker.com`, `ghcr.io`, `pkg-containers.githubusercontent.com` |
 | OS packages | the image's apt sources: `ports.ubuntu.com`, `download.docker.com`, `cli.github.com` |
-| Model endpoint | the API the harness itself talks to, for example `api.anthropic.com` at H0 |
+| Model proxy | `HEATCTL_MODEL_URL`, by exact host and port: the one private address a build reaches. No model vendor's own API is reachable |
 
 | Denied | How |
 |---|---|
 | This repository | by path, on every host above that serves it: GitHub's web, API, archive and raw hosts, and the Go module proxy, which serves any public GitHub repository as a module. Matched without regard to case, with or without `.git`, and in Go's escaped form |
 | The project's site | the whole domain |
-| The agent kit's own hosts | every host the kit allows on its own that is not on the allowlist: its console, docs, updates, connectors and remote control |
+| The agent kit's own hosts | every host the kit allows on its own that is not on the allowlist: the vendor's API, console, docs, updates, connectors and remote control |
 | Everything else | the general web, search engines, and every private address range, the house's included |
 
 Rules that go with it:
@@ -100,18 +109,24 @@ Rules that go with it:
 - **No MCP servers.** The kit connects every sandbox to an MCP gateway that the policy
   cannot close. Claude Code starts with none (`--strict-mcp-config`), and the run refuses to
   start if any MCP server is registered on the host, since the gateway would offer it.
-- **One credential, outside the sandbox.** The model API key is the only secret a build
-  can use, and it never enters the sandbox: the sandbox proxy adds it to requests to the
-  model endpoint. It is a dedicated key with a spend limit, used for nothing else. No other
-  credentials, no SSH keys, no registry tokens, so nothing can be published. The run
-  refuses to start if any secret is shared with every sandbox.
-- **Fail closed.** Before the build starts, the run checks that the controls are reachable
-  and that `example.com`, the private ranges, the kit's hosts and every denied path, in
-  other cases and escapes, are refused. If any check fails, there is no build.
+- **One credential, outside the sandbox.** The build key for the model proxy is the only
+  secret a build can use, and it never enters the sandbox: the sandbox holds a placeholder,
+  which the sandbox proxy swaps for the key on requests to the model proxy. The key is used
+  for builds only, has a budget generous enough never to stop a normal build, and cannot
+  reach the proxy's admin routes. No other credentials, no SSH keys, no registry tokens, so
+  nothing can be published. The run refuses to start if any secret is shared with every
+  sandbox.
+- **Fail closed.** Before the build starts, the run checks that the controls and the model
+  proxy are reachable; that `example.com`, the private ranges, the kit's hosts, the proxy
+  host's other ports, the addresses the operator lists as never to be reached (the house's
+  broker among them) and every denied path, in other cases and escapes, are refused; and
+  that the build key gets no further than the model. If any check fails, there is no build.
 - **Every host is logged.** The sandbox's network log lists every host allowed or blocked
   per build, with a count. Logs are taken before and after the build, so what the sandbox
   does on its own at start is not counted. The negative layer reads it: a build that tries
-  a closed host is flagged.
+  a closed host is flagged. Requests to the model proxy are an exception: plain HTTP to the
+  same host is counted once, not per request, so the proxy's own log is the record of model
+  traffic.
 - **Outside state is noise, recorded.** Anonymous pulls from Docker Hub are rate-limited,
   and registries move. A build that fails on either is recorded as such, not retried until
   it passes.
