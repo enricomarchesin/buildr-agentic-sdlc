@@ -1,6 +1,6 @@
 # heatctl — specification
 
-Spec version: 1.0-draft
+Spec version: 1.0
 
 ## 1. Purpose
 
