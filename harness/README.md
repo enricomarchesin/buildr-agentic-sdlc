@@ -21,7 +21,7 @@ harness/
   CHANGELOG.md          one row per version
   adr/                  000-template.md, 001-..., one per version
   run/                  current implementation: at H0 a wrapper around a vendor coding harness
-                        in a Docker Sandbox: build.sh, prompt.txt, allowlist.txt, denylist.txt
+                        in a Docker Sandbox: build.sh, the three prompts, allowlist.txt, denylist.txt
 ```
 
 H0 has no history store and no run records: the vendor harness prints to stdout and that is
@@ -47,8 +47,9 @@ harness/run/build.sh [SPEC]
 One run is one build. `build.sh` creates a fresh Docker Sandbox (`sbx`, one microVM per
 sandbox) with the claude agent and an empty repository holding only `SPEC.md`, gives it the
 network rules below and the build key, runs Claude Code headless with `prompt.txt` until it
-declares done, then archives the repository, Claude Code's output stream, the sandbox's
-network log and a `meta.json` with cost, turns and times, and removes the sandbox.
+declares done, runs the review and fix rounds described under Gates, then archives the
+repository, every session's output stream, every review, the sandbox's network log and a
+`meta.json` with cost, turns and times per session and in total, and removes the sandbox.
 `HEATCTL_*` variables at the top of the script set the model proxy, the model, the timeout,
 the archive and where the key comes from. Those that describe the operator's own network,
 such as the proxy's address, can live in a file outside the repository,
@@ -146,11 +147,24 @@ Run on 3 November 2026, from a sandbox set up exactly as a build's, with `sbx` v
 
 ## Gates
 
-Gate order is fixed per version and recorded in the ADR. At H0 it is minimal: hand the
-whole spec and an empty repo to the vendor harness, let it build and test as it sees fit
-until it declares done, then grade the build with the hidden evals. Eval results are never
-fed back to the agent. Each later version changes the loop because of a specific failure,
-and the ADR names that failure.
+Gate order is fixed per version and recorded in the ADR. At H0:
+
+1. **Build.** The whole spec and an empty repo go to the vendor harness, which builds and
+   tests as it sees fit until it declares done (`run/prompt.txt`).
+2. **Review.** A fresh session of the same harness and model reviews the build against the
+   spec (`run/review-prompt.txt`). It may build, test, run the program and start whatever it
+   needs, such as an MQTT broker, but must not change the repository; if it does, its
+   changes are undone and recorded. It lists every issue with a severity, high, medium or
+   low, the clause, the file and its evidence.
+3. **Fix.** If any issue is high, a fresh session gets the whole review and fixes the high
+   issues only (`run/fix-prompt.txt`). Then back to review.
+4. **Stop** when no issue is high, after 3 fix rounds, or earlier if a round does not reduce
+   the high issues. Medium and low issues are recorded, never fixed.
+5. **Grade.** The hidden checks grade the result.
+
+The reviewer sees the spec and the code, never the hidden checks or their results, which are
+never fed back to the agent. Each later version changes the loop because of a specific
+failure, and the ADR names that failure.
 
 ## Where numbers go
 

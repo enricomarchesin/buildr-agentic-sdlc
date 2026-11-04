@@ -1,0 +1,5 @@
+A review of the application in this repository against SPEC.md found the issues below. Fix
+every issue whose severity is high, and only those: leave medium and low issues as they are.
+Work until every high issue is fixed.
+
+The review:

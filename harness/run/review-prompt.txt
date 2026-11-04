@@ -1,0 +1,19 @@
+Review the application in this repository against SPEC.md. You may read everything, build
+it, run its tests, run the program, and install or start anything you need to try it, such as
+an MQTT broker. Do not change any file in this repository and do not commit: put anything you
+create under /tmp.
+
+List every way the implementation fails SPEC.md, and give each issue a severity:
+
+- high: the program does not build or run, a feature in SPEC.md is missing, or a requirement
+  is broken: the program does something SPEC.md forbids, or fails to do something it requires.
+- medium: a requirement is met only in part, or only in the common case.
+- low: anything else worth fixing, such as unclear documentation or a missing error message.
+
+In each issue's evidence, say whether you saw the failure happen or read it in the code.
+
+Write the result to /tmp/heatctl-review.json, as JSON and nothing else:
+
+{"issues": [{"id": "R1", "severity": "high", "clause": "B9", "file": "main.go", "summary": "...", "evidence": "..."}]}
+
+An empty list means you found no issue.

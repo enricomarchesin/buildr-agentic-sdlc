@@ -1,7 +1,10 @@
 #!/bin/sh
 # H0: one build. The whole spec and an empty repository go into a fresh Docker sandbox, Claude
-# Code builds until it declares done, and everything the wrapper can see is archived. The
-# sandbox may install from anywhere on allowlist.txt, and never reaches denylist.txt.
+# Code builds until it declares done, then a review session lists the issues by severity and,
+# while any is high, a fix session fixes the high ones and another review follows: at most 3
+# fix rounds, fewer if a round does not reduce the high issues. Everything the wrapper can see
+# is archived. The sandbox may install from anywhere on allowlist.txt, and never reaches
+# denylist.txt.
 #
 #   harness/run/build.sh [SPEC]        default: spec/SPEC.md in this repository
 #
@@ -151,15 +154,61 @@ sbx exec "$run" claude --version >"$dir/claude-version.txt" 2>&1
 sbx policy log "$run" --json >"$dir/network-before.json"
 t1=$(now)
 
-sbx exec -e DISABLE_AUTOUPDATER=1 -e DISABLE_TELEMETRY=1 -e ANTHROPIC_BASE_URL="$model_url" \
-  -e ANTHROPIC_DEFAULT_HAIKU_MODEL="$small_model" -e "ANTHROPIC_CUSTOM_HEADERS=x-litellm-tags: heatctl,harness=H0,run=$run" "$run" \
-  claude -p "$(cat "$here/prompt.txt")" --model "$model" --output-format stream-json --verbose \
-  --dangerously-skip-permissions --strict-mcp-config --disallowedTools WebSearch \
-  </dev/null >"$dir/claude.jsonl" 2>"$dir/claude.stderr" &
-pid=$!
+# Every session is a fresh Claude Code session in this sandbox. They share one time budget: the
+# watchdog stops the sandbox when the run's time is up, and no session starts after that.
 ( sleep "$timeout" && sbx stop "$run" && echo timeout >"$dir/timeout" ) >/dev/null 2>&1 &
 watchdog=$!
-status=0; wait "$pid" || status=$?
+session() {  # name prompt
+  [ ! -f "$dir/timeout" ] || return 124
+  echo "$1" >>"$dir/sessions.txt"
+  sbx exec -e DISABLE_AUTOUPDATER=1 -e DISABLE_TELEMETRY=1 -e ANTHROPIC_BASE_URL="$model_url" \
+    -e ANTHROPIC_DEFAULT_HAIKU_MODEL="$small_model" \
+    -e "ANTHROPIC_CUSTOM_HEADERS=x-litellm-tags: heatctl,harness=H0,run=$run,session=$1" "$run" \
+    claude -p "$2" --model "$model" --output-format stream-json --verbose \
+    --dangerously-skip-permissions --strict-mcp-config --disallowedTools WebSearch \
+    </dev/null >"$dir/$1.jsonl" 2>"$dir/$1.stderr"
+}
+snapshot() {  # the working tree as a git tree, untracked files included, ignored ones not
+  GIT_INDEX_FILE="$dir/.snapshot-index" git -C "$repo" add -A . >/dev/null 2>&1
+  GIT_INDEX_FILE="$dir/.snapshot-index" git -C "$repo" write-tree
+  rm -f "$dir/.snapshot-index"
+}
+status=0; session build "$(cat "$here/prompt.txt")" || status=$?
+
+# Review, and fix the high issues, until none is high. A reviewer that changes the repository
+# is recorded and its changes undone: the review must leave the build as it found it.
+review=0; previous=; stop=
+while [ -z "$stop" ]; do
+  review=$((review + 1))
+  head=$(git -C "$repo" rev-parse HEAD); before=$(snapshot)
+  sbx exec "$run" rm -f /tmp/heatctl-review.json >/dev/null 2>&1 || true
+  session "review-$review" "$(cat "$here/review-prompt.txt")" || true
+  sbx exec "$run" cat /tmp/heatctl-review.json >"$dir/review-$review.json" 2>/dev/null || true
+  after=$(snapshot)
+  if [ "$(git -C "$repo" rev-parse HEAD)" != "$head" ] || [ "$after" != "$before" ]; then
+    echo "review-$review" >>"$dir/review-changed-repo.txt"
+    git -C "$repo" reset -q "$head"
+    git -C "$repo" diff --name-only --diff-filter=A "$before" "$after" | (cd "$repo" && xargs rm -f --)
+    git -C "$repo" checkout -q "$before" -- . && git -C "$repo" reset -q
+  fi
+  high=$(python3 -c '
+import json, sys
+try:
+    issues = json.load(open(sys.argv[1]))["issues"]
+    print(sum(1 for i in issues if str(i.get("severity", "")).lower() == "high"))
+except Exception:
+    print(-1)' "$dir/review-$review.json")
+  if [ -f "$dir/timeout" ]; then stop="time is up"
+  elif [ "$high" -lt 0 ]; then stop="review $review wrote no readable result"
+  elif [ "$high" -eq 0 ]; then stop="no high issues"
+  elif [ "$review" -gt 3 ]; then stop="3 fix rounds done"
+  elif [ -n "$previous" ] && [ "$high" -ge "$previous" ]; then stop="fix round $((review - 1)) did not reduce the high issues"
+  else
+    session "fix-$review" "$(cat "$here/fix-prompt.txt"; echo; cat "$dir/review-$review.json")" || true
+    previous=$high
+  fi
+done
+echo "$stop" >"$dir/stop.txt"
 pkill -P "$watchdog" 2>/dev/null; kill "$watchdog" 2>/dev/null || true
 t2=$(now)
 
@@ -175,14 +224,29 @@ d, run, spec, model, status, t0, t1, t2, t3, small_model = sys.argv[1:]
 t0, t1, t2, t3 = map(float, (t0, t1, t2, t3))
 def sh(*a):
     return subprocess.run(a, capture_output=True, text=True).stdout.strip()
-result = {}
-for line in open(os.path.join(d, "claude.jsonl")):
-    try:
-        m = json.loads(line)
-    except ValueError:
-        continue
-    if m.get("type") == "result":
-        result = {k: m.get(k) for k in ("subtype", "is_error", "num_turns", "duration_ms", "total_cost_usd", "usage")}
+def result(name):
+    for line in open(os.path.join(d, name + ".jsonl")):
+        try:
+            m = json.loads(line)
+        except ValueError:
+            continue
+        if m.get("type") == "result":
+            return {k: m.get(k) for k in ("subtype", "is_error", "num_turns", "duration_ms", "total_cost_usd", "usage")}
+    return {}
+names = open(os.path.join(d, "sessions.txt")).read().split() if os.path.exists(os.path.join(d, "sessions.txt")) else []
+sessions = [dict(name=n, **result(n)) for n in names]
+reviews = []
+for n in names:
+    if n.startswith("review-"):
+        try:
+            issues = json.load(open(os.path.join(d, n + ".json")))["issues"]
+            reviews.append({"name": n, **{s: sum(1 for i in issues if str(i.get("severity", "")).lower() == s) for s in ("high", "medium", "low")}})
+        except Exception:
+            reviews.append({"name": n, "unreadable": True})
+def total(k):
+    return round(sum(x.get(k) or 0 for x in sessions), 4)
+result = {"num_turns": total("num_turns"), "total_cost_usd": total("total_cost_usd")}
+changed = open(os.path.join(d, "review-changed-repo.txt")).read().split() if os.path.exists(os.path.join(d, "review-changed-repo.txt")) else []
 def hosts(name):
     log = json.load(open(os.path.join(d, name)))
     return {k: {e["host"]: e.get("count", 0) for e in log.get(k, [])} for k in ("allowed", "blocked")}
@@ -198,13 +262,18 @@ meta = {
     "sbx": sh("sbx", "version").splitlines()[0] if sh("sbx", "version") else None,
     "template": [l for l in sh("sbx", "template", "ls").splitlines() if "claude-code" in l],
     "exit_status": int(status), "timed_out": os.path.exists(os.path.join(d, "timeout")),
-    "seconds": {"build": round(t2 - t1, 1), "sandbox_overhead": round((t1 - t0) + (t3 - t2), 1)},
+    "seconds": {"sessions": round(t2 - t1, 1), "sandbox_overhead": round((t1 - t0) + (t3 - t2), 1)},
     "result": result,
+    "sessions": sessions,
+    "reviews": reviews,
+    "stop": open(os.path.join(d, "stop.txt")).read().strip() if os.path.exists(os.path.join(d, "stop.txt")) else None,
+    "reviews_that_changed_the_repo": changed,
     "network": network,
     "commits": int(sh("git", "-C", repo, "rev-list", "--count", "HEAD") or 0),
     "uncommitted": sh("git", "-C", repo, "status", "--porcelain").splitlines(),
 }
 json.dump(meta, open(os.path.join(d, "meta.json"), "w"), indent=1)
-print(json.dumps({k: meta[k] for k in ("run_id", "exit_status", "timed_out", "seconds")}))
+print(json.dumps({k: meta[k] for k in ("run_id", "exit_status", "timed_out", "seconds", "stop")}))
+print("reviews:", json.dumps(reviews))
 print("cost:", result.get("total_cost_usd"), "turns:", result.get("num_turns"), "archive:", d)
 EOF
