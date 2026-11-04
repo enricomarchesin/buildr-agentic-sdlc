@@ -91,12 +91,11 @@ fi
 # path, so a reviewer cannot change the code it tests, as root either: the mount is read-only
 # on the host's side.
 review_sb=$run-review
-cleanup() {
+cleanup() {  # removing what is already gone, or never made, is not an error
   for sb in "$run" "$review_sb"; do
-    sbx rm -f "$sb" >/dev/null 2>&1
-    sbx secret rm --placeholder "heatctl-build-$sb" -f >/dev/null 2>&1
+    sbx rm -f "$sb" >/dev/null 2>&1 || true
+    sbx secret rm --placeholder "heatctl-build-$sb" -f >/dev/null 2>&1 || true
   done
-  true
 }
 trap cleanup EXIT
 echo "$global" | sed '/^$/d' >"$dir/global-secrets.txt"

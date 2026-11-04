@@ -60,14 +60,17 @@ hidden from the agent.
 1. **Setup.** A fresh MQTT broker and the build, nothing else. The check plays the devices:
    it publishes sensor readings and listens on actuator topics, as listed in
    section 5 of `spec/SPEC.md`.
-2. **Operator.** A pinned grading model performs the scenario. It can read the README and run
-   commands in a shell, and nothing else. It cannot read the source, so it cannot work around
-   a bad README.
+2. **Operator.** A pinned grading model installs the build by following its README, then,
+   from the README alone and without the source, writes down the commands each step of a
+   scenario needs. The check runs those commands on the scenario's timeline, so its timing is
+   exact. A check that fails is run again with commands the model works out from the
+   program's own help alone, so that a wrong README is told apart from wrong behaviour.
 3. **Verdict.** A few lines of code read the target state off the broker or the build's log
    output. The model operates; it never decides pass or fail. That keeps the oracle
    hard.
 4. **Outcome.** One of: pass; fail-behaviour, the operator did it and the state is wrong;
-   fail-docs, the operator could not work out how from the README; grader error.
+   fail-docs, the operator could not work out how from the README, or the README's commands
+   fail where the program's help gives working ones; grader error.
 5. **Repeats.** Each check runs three times per build. Agreement between the runs is
    recorded, so grader noise is not mistaken for build noise.
 
