@@ -1,10 +1,10 @@
 #!/bin/sh
 # H0: one build. The whole spec and an empty repository go into a fresh Docker sandbox, Claude
-# Code builds until it declares done, then a review session lists the issues by severity and,
-# while any is high, a fix session fixes the high ones and another review follows: at most 5
-# fix rounds. Every review is a fresh session that sees no earlier review. Everything the wrapper can see
-# is archived. The sandbox may install from anywhere on allowlist.txt, and never reaches
-# denylist.txt.
+# Code builds until it declares done, then a review session, in a second sandbox where the
+# repository is read-only, lists the issues by severity; while any is high, a fix session fixes
+# the high ones and another review follows, at most 5 fix rounds. Every review is a fresh
+# session that sees no earlier review. Everything the wrapper can see is archived. Both
+# sandboxes may install from anywhere on allowlist.txt, and never reach denylist.txt.
 #
 #   harness/run/build.sh [SPEC]        default: spec/SPEC.md in this repository
 #
@@ -85,60 +85,75 @@ else
   git -C "$repo" -c user.name=harness -c user.email=harness@localhost commit -qm "spec"
 fi
 
-t0=$(now)
-# The build key never enters the sandbox: it sees a placeholder in ANTHROPIC_API_KEY, which the
-# sandbox proxy swaps for the key on requests to the model proxy. Scoped to this sandbox and set
-# before it is created, so the variable exists from the start.
-placeholder=heatctl-build-$run
-trap 'sbx rm -f "$run" >/dev/null 2>&1; sbx secret rm --placeholder "$placeholder" -f >/dev/null 2>&1 || true' EXIT
-sbx secret set-custom --sandbox "$run" --host "$model_host" --env ANTHROPIC_API_KEY \
-  --placeholder "$placeholder" --command "$key_command" >/dev/null 2>&1 \
-  || die "the key command failed: $key_command"
-sbx create --name "$run" --pull "${HEATCTL_PULL:-never}" claude "$repo" >"$dir/sbx-create.log" 2>&1
-sbx policy allow network --sandbox "$run" "$(paste -s -d, - <"$here/allowlist.txt"),$model_host:$model_port" >/dev/null
+# Two sandboxes, prepared the same way. The build sandbox holds the repository read-write and
+# runs the build and fix sessions. The review sandbox, created before the first review, has an
+# empty scratch directory as its workspace and the repository mounted read-only at the same
+# path, so a reviewer cannot change the code it tests, as root either: the mount is read-only
+# on the host's side.
+review_sb=$run-review
+cleanup() {
+  for sb in "$run" "$review_sb"; do
+    sbx rm -f "$sb" >/dev/null 2>&1
+    sbx secret rm --placeholder "heatctl-build-$sb" -f >/dev/null 2>&1
+  done
+  true
+}
+trap cleanup EXIT
+echo "$global" | sed '/^$/d' >"$dir/global-secrets.txt"
 
-# The agent kit allows hosts of its own on every sandbox it creates. Deny the ones that are
-# not on the allowlist, so the build reaches the allowlist and nothing else.
-kit=$(sbx policy ls --source kit --json | python3 -c '
+glob() {  # any case, and Go's module-path escape: each letter may follow anything
+  python3 -c 'import sys; print("".join(f"*[{c.lower()}{c.upper()}]" if c.isalpha() else c for c in sys.argv[1]))' "$1"
+}
+allowed() {  # sandbox target
+  sbx policy check network --sandbox "$1" --json "$2" \
+    | python3 -c 'import sys,json; sys.exit(0 if json.load(sys.stdin)["allowed"] else 1)'
+}
+prepare() {  # label sandbox workspace...
+  label=$1; sb=$2; shift 2
+  # The build key never enters a sandbox: it sees a placeholder in ANTHROPIC_API_KEY, which the
+  # sandbox proxy swaps for the key on requests to the model proxy. Scoped to the sandbox and
+  # set before it is created, so the variable exists from the start.
+  sbx secret set-custom --sandbox "$sb" --host "$model_host" --env ANTHROPIC_API_KEY \
+    --placeholder "heatctl-build-$sb" --command "$key_command" >/dev/null 2>&1 \
+    || die "the key command failed: $key_command"
+  sbx create --name "$sb" --pull "${HEATCTL_PULL:-never}" claude "$@" >"$dir/$label-sbx-create.log" 2>&1 \
+    || die "could not create the $label sandbox: $dir/$label-sbx-create.log"
+  sbx policy allow network --sandbox "$sb" "$(paste -s -d, - <"$here/allowlist.txt"),$model_host:$model_port" >/dev/null
+
+  # The agent kit allows hosts of its own on every sandbox it creates. Deny the ones that are
+  # not on the allowlist, so the sandbox reaches the allowlist and nothing else.
+  kit=$(sbx policy ls --source kit --json | python3 -c '
 import sys, json
 listed = {l.strip() for l in open(sys.argv[1]) if l.strip()}
 hosts = {r.split(":")[0] for x in json.load(sys.stdin).get("rules", [])
          if x.get("applies_to") == "sandbox:" + sys.argv[2] and x.get("decision") == "allow"
          for r in x.get("resources", [])}
-print(",".join(sorted(hosts - listed)))' "$here/allowlist.txt" "$run")
-[ -z "$kit" ] || sbx policy deny network --sandbox "$run" "$kit" >/dev/null 2>&1
-echo "$kit" | tr , '\n' >"$dir/kit-denied.txt"
-echo "$global" | sed '/^$/d' >"$dir/global-secrets.txt"
+print(",".join(sorted(hosts - listed)))' "$here/allowlist.txt" "$sb")
+  [ -z "$kit" ] || sbx policy deny network --sandbox "$sb" "$kit" >/dev/null 2>&1
+  echo "$kit" | tr , '\n' >"$dir/$label-kit-denied.txt"
 
-# Never reachable: this repository and the project's site, wherever a build could fetch
-# them from (denylist.txt). Deny rules win over allow rules.
-glob() {  # any case, and Go's module-path escape: each letter may follow anything
-  python3 -c 'import sys; print("".join(f"*[{c.lower()}{c.upper()}]" if c.isalpha() else c for c in sys.argv[1]))' "$1"
-}
-grep -v '^#' "$here/denylist.txt" | while read -r host path; do
-  [ -n "$host" ] || continue
-  if [ -z "$path" ]; then sbx policy deny network --sandbox "$run" "$host" >/dev/null 2>&1; continue; fi
-  g=$(glob "$path"); git=$(glob .git)
-  for p in "$g" "$g/**" "$g$git" "$g$git/**"; do
-    sbx policy deny network --sandbox "$run" "$host" --method ANY --path "$p" >/dev/null 2>&1
+  # Never reachable: this repository and the project's site, wherever a build could fetch
+  # them from (denylist.txt). Deny rules win over allow rules.
+  grep -v '^#' "$here/denylist.txt" | while read -r host path; do
+    [ -n "$host" ] || continue
+    if [ -z "$path" ]; then sbx policy deny network --sandbox "$sb" "$host" >/dev/null 2>&1; continue; fi
+    g=$(glob "$path"); git=$(glob .git)
+    for p in "$g" "$g/**" "$g$git" "$g$git/**"; do
+      sbx policy deny network --sandbox "$sb" "$host" --method ANY --path "$p" >/dev/null 2>&1
+    done
   done
-done
 
-# Fail closed: refuse to build unless the sandbox reaches what it may install from, and not
-# the house's network, the kit's own hosts or anything on the denylist.
-allowed() {
-  sbx policy check network --sandbox "$run" --json "$1" \
-    | python3 -c 'import sys,json; sys.exit(0 if json.load(sys.stdin)["allowed"] else 1)'
-}
-for h in example.com 10.0.0.1 172.16.0.1 192.168.1.1 169.254.169.254 api.anthropic.com \
-  "$model_host:22" $must_not_reach $(echo "$kit" | tr , ' ') $(echo "$global" | awk '{print $2}' | sort -u); do
-  allowed "$h" && die "$h is reachable"
-done
-allowed "$model_host:$model_port" || die "the model proxy $model_host:$model_port is not reachable"
-# Path rules are only enforced on a live request, so the rest is checked from inside: every
-# denylist entry, also in other cases and escapes, must get 403, and the two controls must not.
-controls="https://proxy.golang.org/github.com/eclipse/paho.golang/@v/list https://github.com/eclipse/paho.golang $model_url/health/liveliness"
-denied=$(grep -v '^#' "$here/denylist.txt" | python3 -c '
+  # Fail closed: refuse to go on unless the sandbox reaches what it may install from, and not
+  # the house's network, the kit's own hosts or anything on the denylist.
+  for h in example.com 10.0.0.1 172.16.0.1 192.168.1.1 169.254.169.254 api.anthropic.com \
+    "$model_host:22" $must_not_reach $(echo "$kit" | tr , ' ') $(echo "$global" | awk '{print $2}' | sort -u); do
+    allowed "$sb" "$h" && die "$h is reachable from the $label sandbox"
+  done
+  allowed "$sb" "$model_host:$model_port" || die "the model proxy $model_host:$model_port is not reachable"
+  # Path rules are only enforced on a live request, so the rest is checked from inside: every
+  # denylist entry, also in other cases and escapes, must get 403, and the controls must not.
+  controls="https://proxy.golang.org/github.com/eclipse/paho.golang/@v/list https://github.com/eclipse/paho.golang $model_url/health/liveliness"
+  denied=$(grep -v '^#' "$here/denylist.txt" | python3 -c '
 import sys
 for line in sys.stdin:
     f = line.split()
@@ -146,38 +161,41 @@ for line in sys.stdin:
     host, path = f[0].replace("*.", "www."), (f[1] if len(f) > 1 else "/")
     for p in {path, path + "/x", path.swapcase() + ".GIT", "".join("!" + c if c.isalpha() else c for c in path)}:
         print(f"https://{host}{p}")')
-sbx exec "$run" sh -c 'for u; do echo "$(curl -s -o /dev/null -m 20 -w "%{http_code}" "$u") $u"; done' \
-  sh $controls $denied >"$dir/reach-check.txt" 2>"$dir/reach-check.err"
-python3 - "$dir/reach-check.txt" $controls <<'EOF' || die "reach check failed: $dir/reach-check.txt"
+  sbx exec "$sb" sh -c 'for u; do echo "$(curl -s -o /dev/null -m 20 -w "%{http_code}" "$u") $u"; done' \
+    sh $controls $denied >"$dir/$label-reach-check.txt" 2>"$dir/$label-reach-check.err"
+  python3 -c '
 import sys
 codes = {u: c for c, u in (l.split() for l in open(sys.argv[1]) if l.strip())}
 bad = [u for u in sys.argv[2:] if not codes.get(u, "000")[0] in "23"]
 bad += [u for u, c in codes.items() if u not in sys.argv[2:] and c != "403"]
 print("\n".join(bad), file=sys.stderr)
-sys.exit(1 if bad else 0)
-EOF
+sys.exit(1 if bad else 0)' "$dir/$label-reach-check.txt" $controls || die "reach check failed: $dir/$label-reach-check.txt"
 
-# The build key reaches the model, and nothing it can do on the proxy goes beyond that.
-admin=$(sbx exec -e "U=$model_url" "$run" sh -c 'curl -s -m 20 -o /dev/null -w "%{http_code}" -X POST "$U/key/generate" -H "Authorization: Bearer $ANTHROPIC_API_KEY" -H "content-type: application/json" -d "{}"' 2>/dev/null)
-case $admin in 401|403) ;; *) die "the build key can reach the proxy's admin routes (HTTP $admin)";; esac
+  # The build key reaches the model, and nothing it can do on the proxy goes beyond that.
+  admin=$(sbx exec -e "U=$model_url" "$sb" sh -c 'curl -s -m 20 -o /dev/null -w "%{http_code}" -X POST "$U/key/generate" -H "Authorization: Bearer $ANTHROPIC_API_KEY" -H "content-type: application/json" -d "{}"' 2>/dev/null)
+  case $admin in 401|403) ;; *) die "the build key can reach the proxy's admin routes from the $label sandbox (HTTP $admin)";; esac
+  sbx policy log "$sb" --json >"$dir/$label-network-before.json"
+}
 
+t0=$(now)
+prepare build "$run" "$repo"
 sbx exec "$run" claude --version >"$dir/claude-version.txt" 2>&1
-sbx policy log "$run" --json >"$dir/network-before.json"
 t1=$(now)
 
-# Every session is a fresh Claude Code session in this sandbox. They share one time budget: the
-# watchdog stops the sandbox when the run's time is up, and no session starts after that.
-( sleep "$timeout" && sbx stop "$run" && echo timeout >"$dir/timeout" ) >/dev/null 2>&1 &
+# Every session is a fresh Claude Code session, run from the repository's path. They share one
+# time budget: the watchdog stops both sandboxes when the run's time is up, and no session
+# starts after that.
+( sleep "$timeout" && { sbx stop "$run"; sbx stop "$review_sb"; echo timeout >"$dir/timeout"; } ) >/dev/null 2>&1 &
 watchdog=$!
-session() {  # name prompt
+session() {  # sandbox name prompt
   [ ! -f "$dir/timeout" ] || return 124
-  echo "$1" >>"$dir/sessions.txt"
-  sbx exec -e DISABLE_AUTOUPDATER=1 -e DISABLE_TELEMETRY=1 -e ANTHROPIC_BASE_URL="$model_url" \
+  echo "$2" >>"$dir/sessions.txt"
+  sbx exec -w "$repo" -e DISABLE_AUTOUPDATER=1 -e DISABLE_TELEMETRY=1 -e ANTHROPIC_BASE_URL="$model_url" \
     -e ANTHROPIC_DEFAULT_HAIKU_MODEL="$small_model" \
-    -e "ANTHROPIC_CUSTOM_HEADERS=x-litellm-tags: heatctl,harness=H0,run=$run,session=$1" "$run" \
-    claude -p "$2" --model "$model" --output-format stream-json --verbose \
+    -e "ANTHROPIC_CUSTOM_HEADERS=x-litellm-tags: heatctl,harness=H0,run=$run,session=$2" "$1" \
+    claude -p "$3" --model "$model" --output-format stream-json --verbose \
     --dangerously-skip-permissions --strict-mcp-config --disallowedTools WebSearch \
-    </dev/null >"$dir/$1.jsonl" 2>"$dir/$1.stderr"
+    </dev/null >"$dir/$2.jsonl" 2>"$dir/$2.stderr"
 }
 snapshot() {  # the working tree as a git tree, untracked files included, ignored ones not
   GIT_INDEX_FILE="$dir/.snapshot-index" git -C "$repo" add -A . >/dev/null 2>&1
@@ -185,18 +203,21 @@ snapshot() {  # the working tree as a git tree, untracked files included, ignore
   rm -f "$dir/.snapshot-index"
 }
 status=0
-[ -n "$from" ] || session build "$(cat "$here/prompt.txt")" || status=$?
+[ -n "$from" ] || session "$run" build "$(cat "$here/prompt.txt")" || status=$?
 
-# Review, and fix the high issues, until none is high. A reviewer that changes the repository
-# is recorded, its changes kept as a patch in the archive, and undone: the review must leave
-# the build as it found it.
+# Review, and fix the high issues, until none is high. The repository is read-only to the
+# reviewer; should it change anyway, that is recorded, the change kept as a patch, and undone.
+tr0=$(now)
+mkdir -p "$dir/review-scratch"
+[ -f "$dir/timeout" ] || prepare review "$review_sb" "$dir/review-scratch" "$repo:ro"
+tr1=$(now)
 review=0; stop=
 while [ -z "$stop" ]; do
   review=$((review + 1))
   head=$(git -C "$repo" rev-parse HEAD); before=$(snapshot)
-  sbx exec "$run" rm -f /tmp/heatctl-review.json >/dev/null 2>&1 || true
-  session "review-$review" "$(cat "$here/review-prompt.txt")" || true
-  sbx exec "$run" cat /tmp/heatctl-review.json >"$dir/review-$review.json" 2>/dev/null || true
+  sbx exec "$review_sb" rm -f /tmp/heatctl-review.json >/dev/null 2>&1 || true
+  session "$review_sb" "review-$review" "$(cat "$here/review-prompt.txt")" || true
+  sbx exec "$review_sb" cat /tmp/heatctl-review.json >"$dir/review-$review.json" 2>/dev/null || true
   after=$(snapshot)
   if [ "$(git -C "$repo" rev-parse HEAD)" != "$head" ] || [ "$after" != "$before" ]; then
     echo "review-$review" >>"$dir/review-changed-repo.txt"
@@ -218,23 +239,25 @@ except Exception:
   elif [ "$high" -eq 0 ]; then stop="no high issues"
   elif [ "$review" -gt 5 ]; then stop="5 fix rounds done"
   else
-    session "fix-$review" "$(cat "$here/fix-prompt.txt"; echo; cat "$dir/review-$review.json")" || true
+    session "$run" "fix-$review" "$(cat "$here/fix-prompt.txt"; echo; cat "$dir/review-$review.json")" || true
   fi
 done
 echo "$stop" >"$dir/stop.txt"
 pkill -P "$watchdog" 2>/dev/null; kill "$watchdog" 2>/dev/null || true
 t2=$(now)
 
-sbx policy log "$run" --json >"$dir/network-after.json"
-sbx rm -f "$run" >/dev/null
-sbx secret rm --placeholder "$placeholder" -f >/dev/null 2>&1 || true
+for label in build review; do
+  sb=$run; [ "$label" = build ] || sb=$review_sb
+  sbx policy log "$sb" --json >"$dir/$label-network-after.json" 2>/dev/null || true
+done
+cleanup
 trap - EXIT
 t3=$(now)
 
-python3 - "$dir" "$run" "$spec" "$model" "$status" "$t0" "$t1" "$t2" "$t3" "$small_model" <<'EOF'
-import hashlib, json, os, subprocess, sys
-d, run, spec, model, status, t0, t1, t2, t3, small_model = sys.argv[1:]
-t0, t1, t2, t3 = map(float, (t0, t1, t2, t3))
+python3 - "$dir" "$run" "$spec" "$model" "$status" "$t0" "$t1" "$t2" "$t3" "$small_model" "$tr0" "$tr1" <<'EOF'
+import hashlib, json, os, re, subprocess, sys
+d, run, spec, model, status, t0, t1, t2, t3, small_model, tr0, tr1 = sys.argv[1:]
+t0, t1, t2, t3, tr0, tr1 = map(float, (t0, t1, t2, t3, tr0, tr1))
 def sh(*a):
     return subprocess.run(a, capture_output=True, text=True).stdout.strip()
 def result(name):
@@ -248,15 +271,26 @@ def result(name):
     return {}
 names = open(os.path.join(d, "sessions.txt")).read().split() if os.path.exists(os.path.join(d, "sessions.txt")) else []
 sessions = [dict(name=n, **result(n)) for n in names]
+# Every clause and criterion id in the spec, to find what a review left on neither list.
+spec_ids = set(re.findall(r"^- ((?:[A-Z][0-9]+|F[0-9]+\.AC[0-9]+))(?=:)", open(spec).read(), re.M))
 reviews = []
 for n in names:
     if n.startswith("review-"):
         try:
             issues = json.load(open(os.path.join(d, n + ".json")))["issues"]
-            confirmed = json.load(open(os.path.join(d, n + ".json"))).get("confirmed", [])
+            review = json.load(open(os.path.join(d, n + ".json")))
+            # A clause named in an issue is not confirmed, whatever the reviewer's lists say.
+            in_issues = set()
+            for i in issues:
+                in_issues |= set(re.findall(r"[A-Z][0-9]+(?:\.AC[0-9]+)?", str(i.get("clause", "")))) & spec_ids
+            listed = set(review.get("confirmed", []))
+            confirmed = listed - in_issues
+            unconfirmed = set(review.get("unconfirmed", [])) | in_issues
             reviews.append({"name": n, **{s: sum(1 for i in issues if str(i.get("severity", "")).lower() == s) for s in ("high", "medium", "low")},
                             "not_tested": sum(1 for i in issues if str(i.get("status", "")).lower() in ("not tested", "not confirmed")),
-                            "confirmed": len(confirmed)})
+                            "confirmed": len(confirmed & spec_ids), "unconfirmed": len(unconfirmed & spec_ids),
+                            "confirmed_despite_an_issue": sorted(listed & in_issues),
+                            "on_neither_list": sorted(spec_ids - confirmed - unconfirmed)})
         except Exception:
             reviews.append({"name": n, "unreadable": True})
 def total(k):
@@ -264,10 +298,18 @@ def total(k):
 result = {"num_turns": total("num_turns"), "total_cost_usd": total("total_cost_usd")}
 changed = open(os.path.join(d, "review-changed-repo.txt")).read().split() if os.path.exists(os.path.join(d, "review-changed-repo.txt")) else []
 def hosts(name):
-    log = json.load(open(os.path.join(d, name)))
+    try:
+        log = json.load(open(os.path.join(d, name)))
+    except (OSError, ValueError):
+        log = {}
     return {k: {e["host"]: e.get("count", 0) for e in log.get(k, [])} for k in ("allowed", "blocked")}
-before, after = hosts("network-before.json"), hosts("network-after.json")
-network = {k: {h: n - before[k].get(h, 0) for h, n in after[k].items() if n > before[k].get(h, 0)} for k in after}
+network = {"allowed": {}, "blocked": {}}
+for label in ("build", "review"):
+    before, after = hosts(label + "-network-before.json"), hosts(label + "-network-after.json")
+    for k in after:
+        for h, n in after[k].items():
+            if n > before[k].get(h, 0):
+                network[k][h] = network[k].get(h, 0) + n - before[k].get(h, 0)
 specbytes = open(spec, "rb").read()
 version = next((l.split(":", 1)[1].strip() for l in specbytes.decode().splitlines() if l.startswith("Spec version:")), None)
 repo = os.path.join(d, "repo")
@@ -279,7 +321,7 @@ meta = {
     "sbx": sh("sbx", "version").splitlines()[0] if sh("sbx", "version") else None,
     "template": [l for l in sh("sbx", "template", "ls").splitlines() if "claude-code" in l],
     "exit_status": int(status), "timed_out": os.path.exists(os.path.join(d, "timeout")),
-    "seconds": {"sessions": round(t2 - t1, 1), "sandbox_overhead": round((t1 - t0) + (t3 - t2), 1)},
+    "seconds": {"sessions": round(t2 - t1 - (tr1 - tr0), 1), "sandbox_overhead": round((t1 - t0) + (tr1 - tr0) + (t3 - t2), 1)},
     "result": result,
     "sessions": sessions,
     "reviews": reviews,

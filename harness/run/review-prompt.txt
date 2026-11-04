@@ -33,7 +33,10 @@ evidence: what you did and what you saw.
 Write the result to /tmp/heatctl-review.json, as JSON and nothing else:
 
 {"issues": [{"id": "R1", "severity": "high", "status": "broken", "clause": "B9", "file": "main.go", "summary": "...", "evidence": "..."}],
- "confirmed": ["C1", "B1", "F1.AC1"]}
+ "confirmed": ["C1", "B1", "F1.AC1"],
+ "unconfirmed": ["B9", "F5.AC3"]}
 
-"status" is "broken" or "not tested". "confirmed" lists every clause and criterion you
-tested and found met. An empty issues list means the application adheres to SPEC.md in full.
+"status" is "broken" or "not tested". "confirmed" lists every clause and criterion you tested
+and found met; "unconfirmed" lists every one you could not confirm as met, whether broken or
+not tested. Together they name every clause and criterion in SPEC.md once. No high issue
+means SPEC.md is fully implemented.

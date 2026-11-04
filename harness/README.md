@@ -155,10 +155,13 @@ Gate order is fixed per version and recorded in the ADR. At H0:
    acceptance criterion of the spec against the build (`run/review-prompt.txt`). How it
    tests each one is up to it; it may simulate the devices, as long as they behave as the
    spec describes them. A requirement that is not implemented, or that it cannot test, is a
-   high issue; the prompt defines each severity with examples. It must not change the repository; if it
-   does, its changes are undone and recorded. It lists every issue with a severity, high,
-   medium or low, whether it is broken or not tested, the clause, the file and its evidence,
-   and every clause it found met.
+   high issue; the prompt defines each severity with examples. It runs in a second sandbox,
+   prepared like the first, where the repository is mounted read-only from the host's side,
+   so it cannot change the code it tests, as root either; a change that got through anyway
+   would be recorded, kept as a patch and undone. It lists every issue with a severity, high,
+   medium or low, whether it is broken or not tested, the clause, the file and its evidence;
+   then every clause it confirmed and every clause it could not, which together must name
+   them all.
 3. **Fix.** If any issue is high, a fresh session gets the whole review and deals with the
    high issues only (`run/fix-prompt.txt`): it fixes what is broken, and makes sure of what
    could not be tested, in a way the next review can test. Then back to review.
