@@ -21,7 +21,9 @@ harness/
   CHANGELOG.md          one row per version
   adr/                  000-template.md, 001-..., one per version
   run/                  current implementation: at H0 a wrapper around a vendor coding harness
-                        in a Docker Sandbox: build.sh, the three prompts, allowlist.txt, denylist.txt
+                        in a Docker Sandbox: build.sh, the run; cage.sh, the sandboxes and their
+                        network rules; loop.sh, the sessions and the review and fix rounds;
+                        meta.py, the record; the three prompts, allowlist.txt, denylist.txt
 ```
 
 H0 has no history store and no run records: the vendor harness prints to stdout and that is
@@ -53,7 +55,9 @@ repository, every session's output stream, every review, the sandbox's network l
 `HEATCTL_*` variables at the top of the script set the model proxy, the model, the timeout,
 the archive and where the key comes from. Those that describe the operator's own network,
 such as the proxy's address, can live in a file outside the repository,
-`~/.config/heatctl/build.env`.
+`~/.config/heatctl/build.env`. `HEATCTL_CHECK_ONLY=1` prepares both sandboxes, runs the network checks
+below and stops before any session, so a change to the network rules can be tried at no
+cost.
 
 **The model proxy.** Claude Code does not call a model vendor directly. It talks, in
 Anthropic's format, to a LiteLLM proxy on the operator's network (`HEATCTL_MODEL_URL`),
@@ -77,7 +81,7 @@ what earlier builds got wrong: that would credit a version with what it read. An
 never reach the house's network, where the real relays are.
 
 The sandbox has no route out except the proxy. The host's global policy is deny-all; for
-each build's sandbox alone, `build.sh` allows the hosts in `run/allowlist.txt` and denies
+each build's sandbox alone, `cage.sh` allows the hosts in `run/allowlist.txt` and denies
 those in `run/denylist.txt`. A deny wins over an allow.
 
 | Allowed | Hosts |
