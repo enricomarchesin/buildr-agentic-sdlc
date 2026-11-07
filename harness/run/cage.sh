@@ -23,11 +23,12 @@ for c in custom:
     for h in c.get("targets", []):
         print(c.get("env"), h)')
   echo "$global" | grep -q ' ?$' && die "a global sbx secret goes to hosts this script does not know: $(echo "$global" | awk '$2=="?"{print $1}')"
-  mcp=$(sbx mcp ls 2>&1) || true  # exits 0 on errors too, such as being signed out of Docker
+  mcp=$(sbx mcp ls 2>&1) || true  # exits 0 on errors too, such as being signed out of Docker, and may print progress lines before the error
   case $mcp in
     *'No MCP servers registered'*) ;;
-    [Ee]rror:*) die "sbx mcp ls: $(echo "$mcp" | head -1 | sed 's/^[Ee]rror: //')" ;;
-    *) die "MCP servers are registered with sbx; remove them first" ;;
+    *) err=$(echo "$mcp" | sed -n 's/^[Ee]rror: //p' | head -1)
+       [ -z "$err" ] || die "sbx mcp ls: $err"
+       die "MCP servers are registered with sbx; remove them first" ;;
   esac
 }
 
