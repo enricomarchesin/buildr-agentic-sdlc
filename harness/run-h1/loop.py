@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import os
 import json
+import shutil
 import subprocess
 import sys
 from collections.abc import Awaitable, Callable
@@ -28,6 +29,9 @@ from sbx_backend import SbxBackend
 from session import run_session
 
 FIX_ROUNDS = 5
+TOOL_STATE = '.pydantic-ai-harness'
+"""Where the framework's shell tool keeps its job logs: in the working directory, which is the repository.
+It ignores itself in git, and is of no use once a session is over, so it does not stay in the deliverable."""
 REVIEW_FILE = '/tmp/heatctl-review.json'
 """Where the reviewer writes its result, inside the review sandbox (`review-prompt.txt`)."""
 
@@ -140,6 +144,7 @@ def live_session(run: Run, run_id: str, deadline: float) -> Session:
             backend=SbxBackend(sandbox, working_dir=str(run.repo)),
             deadline=deadline,
         )
+        shutil.rmtree(run.repo / TOOL_STATE, ignore_errors=True)
         if record['status'] == 'timeout':
             run.timed_out.write_text('timeout\n')
 

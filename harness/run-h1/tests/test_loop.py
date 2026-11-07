@@ -112,3 +112,10 @@ async def test_a_reviewer_that_changes_the_repository_is_recorded_and_undone(run
 async def test_a_reviewer_that_changes_nothing_leaves_no_trace(run):
     await go(run, Script([CLEAN]))
     assert not (run.archive / 'review-changed-repo.txt').exists()
+
+
+def test_the_tool_state_the_shell_leaves_in_the_repository_is_named_for_removal(run):
+    """The directory is the framework's; if it renames it, this fails and the deliverable would carry the new one."""
+    from pydantic_ai_harness._workspace import METADATA_DIR
+
+    assert loop.TOOL_STATE == METADATA_DIR

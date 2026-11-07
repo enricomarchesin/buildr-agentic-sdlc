@@ -16,6 +16,9 @@ from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.providers.anthropic import AnthropicProvider
 
 DEFAULT_MODEL = 'claude-sonnet-5-5'
+BETAS = 'interleaved-thinking-2025-05-14,effort-2025-11-24'
+"""The two of Claude Code's beta features that change how the model behaves: thinking between tool calls, and
+effort. The rest of its list is about Claude Code's own features."""
 DEFAULT_KEY_COMMAND = f'/usr/bin/security find-generic-password -a {os.environ.get("USER", "")} -s heatctl-build -w'
 
 
@@ -42,7 +45,10 @@ def build_model(*, run: str, session: str, model: str | None = None) -> Anthropi
     client = AsyncAnthropic(
         api_key=read_key(),
         base_url=url,
-        default_headers={'x-litellm-tags': f'heatctl,harness=H1,run={run},session={session}'},
+        default_headers={
+            'x-litellm-tags': f'heatctl,harness=H1,run={run},session={session}',
+            'anthropic-beta': BETAS,
+        },
         max_retries=2,
     )
     return AnthropicModel(

@@ -7,14 +7,23 @@ what it may do are written here and nowhere else.
 from __future__ import annotations
 
 from pydantic_ai import Agent
+from pydantic_ai.models.anthropic import AnthropicModelSettings
 from pydantic_ai.usage import UsageLimits
 from pydantic_ai_harness.coder import Coder
 from pydantic_ai_harness.step_persistence import StepPersistence, StepStore
 
 from models import build_model
 
-MAX_OUTPUT_TOKENS = 32_000
-"""Per response. Claude Code's default for the same model, and enough for a file of a thousand lines."""
+# What Claude Code sends for the same model, read off a request of Claude Code 2.1.309 on 8 November
+# 2026. Sent unset, the model thinks without a limit and spends
+# the whole response on it before it does anything; with these, H0 and H1 ask the model the same.
+SETTINGS = AnthropicModelSettings(
+    max_tokens=128_000,
+    anthropic_effort='medium',
+    # Thinking adaptive, its text left out of the response: the tokens are still spent and counted. The
+    # SDK's type for this setting has no `display`, so it goes in the body as it is.
+    extra_body={'thinking': {'type': 'adaptive', 'display': 'omitted'}},
+)
 
 NO_LIMIT = UsageLimits(request_limit=None)
 """The framework stops a run at 50 model requests unless told otherwise. H0's only limit is the
@@ -35,5 +44,5 @@ def make_agent(*, run: str, name: str, step_id: str, store: StepStore, model: st
             Coder(sub_agents=False, unrestricted_filesystem=True),
             StepPersistence(store=store, agent_name=name, run_id=step_id),
         ],
-        model_settings={'max_tokens': MAX_OUTPUT_TOKENS},
+        model_settings=SETTINGS,
     )
