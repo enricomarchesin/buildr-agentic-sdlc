@@ -9,6 +9,7 @@ from __future__ import annotations
 from pydantic_ai import Agent
 from pydantic_ai.usage import UsageLimits
 from pydantic_ai_harness.coder import Coder
+from pydantic_ai_harness.step_persistence import StepPersistence, StepStore
 
 from models import build_model
 
@@ -20,15 +21,19 @@ NO_LIMIT = UsageLimits(request_limit=None)
 run's time, and so is H1's."""
 
 
-def make_agent(*, run: str, session: str, model: str | None = None) -> Agent:
+def make_agent(*, run: str, name: str, store: StepStore, model: str | None = None) -> Agent:
     """One session's agent.
 
     The coder gets no delegates: the prompts never ask for any, and a delegate multiplies the
     cost of a run. It may reach any path in its workspace, which is a sandbox, as Claude Code
-    could. The workspace itself is given when the session runs.
+    could. The workspace itself is given when the session runs. Every step of the session is
+    recorded in `store` as it happens, under the session's name.
     """
     return Agent(
-        build_model(run=run, session=session, model=model),
-        capabilities=[Coder(sub_agents=False, unrestricted_filesystem=True)],
+        build_model(run=run, session=name, model=model),
+        capabilities=[
+            Coder(sub_agents=False, unrestricted_filesystem=True),
+            StepPersistence(store=store, agent_name=name, run_id=name),
+        ],
         model_settings={'max_tokens': MAX_OUTPUT_TOKENS},
     )

@@ -4,34 +4,29 @@ Sends "Say hi." through the same model, proxy and tools an H1 session uses, in a
 on the host, and prints what the first request cost in tokens. H0's counterpart is a Claude Code
 session of one turn; see `harness/README.md`.
 
-    uv run python say_hi.py [--cache]
+    uv run python say_hi.py
 """
 
 from __future__ import annotations
 
-import sys
 import tempfile
 import time
+from pathlib import Path
 
-from pydantic_ai import Agent
-from pydantic_ai.capabilities import LocalWorkspace
-from pydantic_ai_harness.coder import Coder
+from pydantic_ai.workspaces import LocalWorkspaceBackend
+from pydantic_ai_harness.step_persistence import InMemoryStepStore
 
-from models import build_model, load_env
+from agent import make_agent
+from models import load_env
 
 WINDOWS = (250_000, 150_000, 128_000, 64_000, 32_000)
 
 
 def main() -> None:
     load_env()
-    settings = {'anthropic_cache_messages': True} if '--cache' in sys.argv else {}
     with tempfile.TemporaryDirectory() as empty:
-        agent = Agent(
-            build_model(run=f'say-hi-{int(time.time())}', session='say-hi'),
-            capabilities=[LocalWorkspace(empty), Coder()],
-            model_settings=settings,
-        )
-        result = agent.run_sync('Say hi.')
+        agent = make_agent(run=f'say-hi-{int(time.time())}', name='say-hi', store=InMemoryStepStore())
+        result = agent.run_sync('Say hi.', workspace=LocalWorkspaceBackend(Path(empty)))
     usage = result.usage
     prompt = usage.input_tokens
     print(f'reply: {result.output!r}')

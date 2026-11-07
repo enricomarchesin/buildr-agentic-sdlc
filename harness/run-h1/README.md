@@ -9,7 +9,7 @@ rules, the review and fix rounds, the held-out checks that grade a build.
 build.sh        the run, top to bottom; the same steps as H0's
 cage.sh         the sandboxes and their network rules: H0's, but see below
 loop.py         the build session, then review and fix rounds until no issue is high
-session.py      one session: a prompt, an agent, a sandbox, and what is kept of it
+session.py      one session: a prompt, an agent, a sandbox, and what is kept of it (its step log is the framework's)
 agent.py        the agent: the framework's coder, our model, the limits
 models.py       the model, through the operator's proxy, tagged for its spend log
 reviews.py      reading a review's JSON
@@ -30,7 +30,7 @@ tests/          the harness's own tests
 | The sandbox's route to the model proxy | allowed, one host and port | refused, and checked |
 | Delegates | the vendor's `Task` tool | none |
 | Request limit | the vendor's | none: the run's time is the only limit, as in H0 |
-| What a session leaves | the vendor's output stream | every message, tools and thinking included, and a record |
+| What a session leaves | the vendor's output stream | every message, a step log written as the session goes (`tail -f steps/NAME/events.jsonl`), and a record |
 
 Shared with H0 and tested to stay so: the three prompts and the two network lists are the same
 bytes (`tests/test_prompts.py`), and a prompt is built the way H0's shell built it.
