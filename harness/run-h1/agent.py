@@ -21,19 +21,19 @@ NO_LIMIT = UsageLimits(request_limit=None)
 run's time, and so is H1's."""
 
 
-def make_agent(*, run: str, name: str, store: StepStore, model: str | None = None) -> Agent:
+def make_agent(*, run: str, name: str, step_id: str, store: StepStore, model: str | None = None) -> Agent:
     """One session's agent.
 
     The coder gets no delegates: the prompts never ask for any, and a delegate multiplies the
     cost of a run. It may reach any path in its workspace, which is a sandbox, as Claude Code
     could. The workspace itself is given when the session runs. Every step of the session is
-    recorded in `store` as it happens, under the session's name.
+    recorded in `store` as it happens, under `step_id`: the session's name, or the name of a retry.
     """
     return Agent(
         build_model(run=run, session=name, model=model),
         capabilities=[
             Coder(sub_agents=False, unrestricted_filesystem=True),
-            StepPersistence(store=store, agent_name=name, run_id=name),
+            StepPersistence(store=store, agent_name=name, run_id=step_id),
         ],
         model_settings={'max_tokens': MAX_OUTPUT_TOKENS},
     )

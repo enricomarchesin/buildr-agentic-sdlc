@@ -28,6 +28,7 @@ tests/          the harness's own tests
 | The agent | Claude Code, in the sandbox | the framework's coder, on the host |
 | The model key | a placeholder in the sandbox, swapped on the way out | on the host; no sandbox has it |
 | The sandbox's route to the model proxy | allowed, one host and port | refused, and checked |
+| A transient error of the model service | retried by the vendor harness: 21 times in H0's archives | retried up to three times, from the last point the step log saved; each retry is in the session's record |
 | Delegates | the vendor's `Task` tool | none |
 | Request limit | the vendor's | none: the run's time is the only limit, as in H0 |
 | What a session leaves | the vendor's output stream | every message, a step log written as the session goes (`tail -f steps/NAME/events.jsonl`), and a record |

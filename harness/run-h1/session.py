@@ -7,6 +7,10 @@ A session ends in one of four ways, and always leaves its record:
     limit        a usage limit of the framework stopped it
     error        anything else; the error is in the record
 
+A transient error of the model service, such as a stream that breaks halfway, does not end a
+session: it is retried from the last point the step log saved, up to three times. Claude Code does
+the same, which is why none of H0's builds died of one. Every retry is in the session's record.
+
 Kept, in the run's archive: `steps/NAME/`, written as the session goes, so a session still running
 can be followed with `tail -f steps/NAME/events.jsonl`, and one that stops leaves what it did;
 `NAME.messages.json`, every message of the conversation, tool calls and results included; and
@@ -23,12 +27,26 @@ from typing import Any
 
 import anyio
 from pydantic_ai import RunContext
-from pydantic_ai.exceptions import UsageLimitExceeded
+from pydantic_ai.exceptions import (
+    ModelConnectionError,
+    ModelRateLimitError,
+    ModelRequestTimeout,
+    ModelServerError,
+    ModelUnavailableError,
+    UsageLimitExceeded,
+)
 from pydantic_ai.messages import AgentStreamEvent, ModelMessage, ModelMessagesTypeAdapter, ModelResponse
 from pydantic_ai.workspaces import WorkspaceBackend
 from pydantic_ai_harness.step_persistence import FileStepStore
 
 from agent import NO_LIMIT, make_agent
+
+TRANSIENT = (ModelRateLimitError, ModelUnavailableError, ModelServerError, ModelConnectionError, ModelRequestTimeout)
+"""What the framework calls an error worth trying again. A rejected request, a bad key or an exhausted
+quota is not: trying again cannot change it."""
+
+RETRY_AFTER = (5.0, 15.0, 45.0)
+"""Seconds to wait before each retry, so three retries at most."""
 
 KEPT_SNAPSHOTS = 5
 """Every snapshot holds the whole conversation so far, so a long session would write one per tool
@@ -65,6 +83,13 @@ def usage_of(messages: list[ModelMessage]) -> dict[str, int]:
     }
 
 
+def resumable(messages: list[ModelMessage]) -> list[ModelMessage]:
+    """The history to carry on from: without the empty response that the failed request left behind."""
+    if messages and isinstance(messages[-1], ModelResponse) and not messages[-1].parts:
+        return messages[:-1]
+    return messages
+
+
 async def run_session(
     *,
     archive: Path,
@@ -78,12 +103,31 @@ async def run_session(
     store = step_store(archive)
     started = time.monotonic()
     status, error, messages = 'success', None, []
+    history: list[ModelMessage] | None = None
+    retries: list[str] = []
+    step_id = name
     try:
-        with anyio.fail_after(max(deadline - time.time(), 0.001)):
-            result = await make_agent(run=run_id, name=name, store=store).run(
-                prompt, workspace=backend, usage_limits=NO_LIMIT, event_stream_handler=drain
-            )
-        messages = result.all_messages()
+        while True:
+            try:
+                with anyio.fail_after(max(deadline - time.time(), 0.001)):
+                    result = await make_agent(run=run_id, name=name, step_id=step_id, store=store).run(
+                        prompt if history is None else None,
+                        message_history=history,
+                        conversation_id=name,
+                        workspace=backend,
+                        usage_limits=NO_LIMIT,
+                        event_stream_handler=drain,
+                    )
+                messages = result.all_messages()
+                break
+            except TRANSIENT as exc:
+                retries.append(f'{type(exc).__name__}: {exc}')
+                if len(retries) > len(RETRY_AFTER):
+                    raise
+                snapshot = await store.latest_snapshot(run_id=step_id, include_interrupted=True)
+                history = resumable(snapshot.messages) if snapshot else history
+                step_id = f'{name}-retry-{len(retries)}'
+                await anyio.sleep(RETRY_AFTER[len(retries) - 1])
     except TimeoutError:
         status = 'timeout'
     except UsageLimitExceeded as exc:
@@ -91,8 +135,8 @@ async def run_session(
     except Exception as exc:  # noqa: BLE001 - a session that fails still leaves its record
         status, error = 'error', f'{type(exc).__name__}: {exc}'
     if status != 'success':
-        snapshot = await store.latest_snapshot(run_id=name, include_interrupted=True)
-        messages = snapshot.messages if snapshot else []
+        snapshot = await store.latest_snapshot(run_id=step_id, include_interrupted=True)
+        messages = resumable(snapshot.messages) if snapshot else (history or [])
 
     (archive / f'{name}.messages.json').write_bytes(ModelMessagesTypeAdapter.dump_json(messages, indent=1))
     usage = usage_of(messages)
@@ -101,6 +145,7 @@ async def run_session(
         'status': status,
         'is_error': status != 'success',
         'error': error,
+        'retries': retries,
         'requests': usage.pop('requests'),
         'duration_ms': round((time.monotonic() - started) * 1000),
         'cost_usd': cost_usd(messages),
