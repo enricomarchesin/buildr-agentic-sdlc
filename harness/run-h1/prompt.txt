@@ -1,0 +1,1 @@
+Build the application specified in SPEC.md, in this repository. The repository holds nothing but SPEC.md. Work until the application is complete.

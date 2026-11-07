@@ -24,6 +24,7 @@ harness/
                         in a Docker Sandbox: build.sh, the run; cage.sh, the sandboxes and their
                         network rules; loop.sh, the sessions and the review and fix rounds;
                         meta.py, the record; the three prompts, allowlist.txt, denylist.txt
+  run-h1/               H1: the same run with the loop ours, on a Python agent framework; see its README
 ```
 
 H0 has no run records. The vendor harness streams each session as messages, tool calls and
