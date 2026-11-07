@@ -20,14 +20,16 @@ harness/
   README.md
   CHANGELOG.md          one row per version
   adr/                  000-template.md, 001-..., one per version
-  run/                  current implementation: at H0 a wrapper around a vendor coding harness
+  run-h0/               H0, the baseline: a wrapper around a vendor coding harness
                         in a Docker Sandbox: build.sh, the run; cage.sh, the sandboxes and their
                         network rules; loop.sh, the sessions and the review and fix rounds;
                         meta.py, the record; the three prompts, allowlist.txt, denylist.txt
 ```
 
-H0 has no history store and no run records: the vendor harness prints to stdout and that is
-all we get. Directories are added here when a version needs them.
+H0 has no run records. The vendor harness streams each session as messages, tool calls and
+results, and the build archives that stream (`build.jsonl`, `review-N.jsonl`), but nothing in
+it is tied to a commit, a check or a decision. Directories are added here when a version needs
+them.
 
 ## Version discipline
 
@@ -43,7 +45,7 @@ all we get. Directories are added here when a version needs them.
 ## Running it
 
 ```
-harness/run/build.sh [SPEC]
+harness/run-h0/build.sh [SPEC]
 ```
 
 One run is one build. `build.sh` creates a fresh Docker Sandbox (`sbx`, one microVM per
@@ -81,8 +83,8 @@ what earlier builds got wrong: that would credit a version with what it read. An
 never reach the house's network, where the real relays are.
 
 The sandbox has no route out except the proxy. The host's global policy is deny-all; for
-each build's sandbox alone, `cage.sh` allows the hosts in `run/allowlist.txt` and denies
-those in `run/denylist.txt`. A deny wins over an allow.
+each build's sandbox alone, `cage.sh` allows the hosts in `run-h0/allowlist.txt` and denies
+those in `run-h0/denylist.txt`. A deny wins over an allow.
 
 | Allowed | Hosts |
 |---|---|
@@ -154,9 +156,9 @@ Run on 3 November 2026, from a sandbox set up exactly as a build's, with `sbx` v
 Gate order is fixed per version and recorded in the ADR. At H0:
 
 1. **Build.** The whole spec and an empty repo go to the vendor harness, which builds and
-   tests as it sees fit until it declares done (`run/prompt.txt`).
+   tests as it sees fit until it declares done (`run-h0/prompt.txt`).
 2. **Review.** A fresh session of the same harness and model tests every clause and every
-   acceptance criterion of the spec against the build (`run/review-prompt.txt`). How it
+   acceptance criterion of the spec against the build (`run-h0/review-prompt.txt`). How it
    tests each one is up to it; it may simulate the devices, as long as they behave as the
    spec describes them. A requirement that is not implemented, or that it cannot test, is a
    high issue; the prompt defines each severity with examples. It runs in a second sandbox,
@@ -167,7 +169,7 @@ Gate order is fixed per version and recorded in the ADR. At H0:
    then every clause it confirmed and every clause it could not, which together must name
    them all.
 3. **Fix.** If any issue is high, a fresh session gets the whole review and deals with the
-   high issues only (`run/fix-prompt.txt`): it fixes what is broken, and makes sure of what
+   high issues only (`run-h0/fix-prompt.txt`): it fixes what is broken, and makes sure of what
    could not be tested, in a way the next review can test. Then back to review.
 4. **Stop** when no issue is high, or after 5 fix rounds. Every review is a fresh session
    that sees no earlier review, so their counts are not compared. Medium and low issues are recorded, never fixed.

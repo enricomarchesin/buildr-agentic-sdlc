@@ -39,8 +39,9 @@ its issues as high, medium or low; while any is high, another session fixes the 
 and the review runs again, at most 5 fix rounds. The review runs in a second sandbox where
 the repository is read-only. The held-out checks grade the result, three builds per version.
 
-- Files: `harness/run/build.sh`, `prompt.txt`, `review-prompt.txt`, `fix-prompt.txt`,
-  `allowlist.txt`, `denylist.txt`, as at commit `e31eb62`, which ran the counted builds.
+- Files: `harness/run-h0/build.sh`, `prompt.txt`, `review-prompt.txt`, `fix-prompt.txt`,
+  `allowlist.txt`, `denylist.txt`, as at commit `e31eb62`, which ran the counted builds. The
+  directory was `harness/run/` then; it was renamed `harness/run-h0/` on 7 November 2026.
 - Network: what the agent installs from, and the model proxy; never this repository, the
   project's site, the house, or the general web. No web search, no MCP servers. Checked
   before every build, which does not start if a check fails (`harness/README.md`, Network).
@@ -54,7 +55,7 @@ the repository is read-only. The held-out checks grade the result, three builds 
 
 ## Consequences
 
-- What we now own: 410 non-blank lines in `harness/run/` at `e31eb62`, 265 of them shell in
+- What we now own: 410 non-blank lines in `harness/run-h0/` at `e31eb62`, 265 of them shell in
   `build.sh`; the prompts; the two network lists. The script was later split into `build.sh`,
   `cage.sh`, `loop.sh` and `meta.py`, with no change in what a build does. No process runs
   between builds.

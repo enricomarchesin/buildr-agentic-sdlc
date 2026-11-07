@@ -46,19 +46,23 @@ it is:
   adopted, not derived.
 - Claude Code reaches the model through a LiteLLM proxy on the operator's network, which
   logs every call and its cost.
-- No own agent, no history store.
+- No agent of our own. The vendor's stream of each session is archived; nothing else is
+  kept as a record.
 
 ## Changes
 
 | Version | Axis | What changed | Forcing constraint | Before -> after | Numbers | LOC owned | ADR | Episode | Status |
 |---|---|---|---|---|---|---|---|---|---|
 | H0 | baseline | nothing: see The baseline | the loop runs unattended from minute one; we want a working agentic SDLC before optimizing any part of it | nothing -> the whole spec reaches green from an empty repo, inside a cage; we own only what surrounds the vendor loop | verification set, 3 builds: F1.AC2 1/3; F3.AC4, F4.AC2, F4.AC4, F5.AC1, F5.AC3, F6.AC1, F6.AC6, F6.AC7, C5 3/3. Cost per accepted change: $4.12, one of 3 builds accepted after its soak. Retries: 0, every build stopped after its first review. Manual interventions: 0. Tests written unprompted: 3, 6 and 10 test functions. Cost per build $1.21 to $1.65; sandbox overhead per run 33 to 35 s | 410 | 001 | 1 | published |
-| H1 | control | an agent loop of our own, with typed tools and its message history persisted, in place of the wrapper and the vendor harness. Its quality against H0 at the same model, Sonnet, is reported as a finding, regressions included | the wrapper is a black box, stdout only: a bad plan and a bad edit look the same, and nothing records which step did what | | | | 002 | 2 | in progress |
+| H1 | control | an agent loop of our own, with typed tools and its message history persisted, in place of the wrapper and the vendor harness. Its quality against H0 at the same model, Sonnet, is reported as a finding, regressions included | the vendor harness carries a lot before it starts: its system prompt, tool definitions and instructions go into every request, and the loop is not ours to change. "Say hi." costs 23,478 tokens of prompt on H0, 9.4% of a 250k window and 15.7% of a 150k one | | | | 002 | 2 | in progress |
 
 A row is added when its version starts. Episode 0 adds no version: it derives the spec.
 
 ## Notes
 
+- Corrected 7 November 2026: H1's forcing constraint first read "a black box, stdout only", and
+  H0 "no history store". Both overstated: H0 archives the full stream of every session. The
+  constraint is now the weight the vendor harness carries before it starts, measured on H0.
 - Rows stay `in progress` until the numbers are filled in. A version with an empty numbers column
   is not published.
 - If a delta is contaminated by feature difficulty, write that in the row rather than

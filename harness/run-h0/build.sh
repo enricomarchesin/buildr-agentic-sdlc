@@ -6,7 +6,7 @@
 # session that sees no earlier review. Everything the wrapper can see is archived. Both
 # sandboxes may install from anywhere on allowlist.txt, and never reach denylist.txt.
 #
-#   harness/run/build.sh [SPEC]        default: spec/SPEC.md in this repository
+#   harness/run-h0/build.sh [SPEC]        default: spec/SPEC.md in this repository
 #
 #   HEATCTL_MODEL_URL       required: base URL of the model proxy, http://host:port. Claude Code
 #                           talks to it in Anthropic's format; it is the only private address

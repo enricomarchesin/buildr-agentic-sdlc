@@ -11,7 +11,7 @@ a harness that takes one fixed spec and an empty repo and builds the whole app, 
 hidden checks and a soak in a real house.
 
 No hand-written app code is ever added. Every `heatctl` build is produced by a harness run.
-The harness code arrives with H0 in `harness/run/`.
+The harness code arrives with H0 in `harness/run-h0/`.
 
 ## Layout
 
