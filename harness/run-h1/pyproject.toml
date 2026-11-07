@@ -1,0 +1,16 @@
+[project]
+name = "heatctl-run-h1"
+version = "0.0.0"
+description = "H1: an agent loop of our own."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic-ai-harness[coder,anthropic]",
+]
+
+[dependency-groups]
+dev = ["pytest", "pytest-asyncio"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
+testpaths = ["tests"]
