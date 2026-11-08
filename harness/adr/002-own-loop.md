@@ -87,10 +87,11 @@ changes. Three builds per version.
   (36 tests). The instructions can be replaced from a file to ask what they do. When they were removed,
   every build left tests (6 of 6, against none of three with them) and the scratch end-to-end check fell
   from three builds to one in six.
-- **What is still not possible:** a claim that owning the loop makes the code better. On the held-out
-  checks it did not, within what three builds show. And a build that is acted on beyond the review's threshold:
-  the reviews of all three counted builds reported the F1.AC2 fault, mostly as medium, and the loop fixes only high
-  issues.
+- **What is still not possible:** a claim that owning the loop makes the code better. On the held-out checks it
+  did not, within what three builds show. And a review whose labels follow its own prompt: the prompt calls an
+  unmet requirement high and gives `validate` accepting what section 4 rejects as its example, yet of the three
+  counted builds only one had its reviewers report the channel-id fault that is that example (first as
+  medium, then high after two reviews), and the loop acts on the labels it is given.
 - **Numbers**, from `CHANGELOG.md`: verification set, 3 builds: F1.AC2 0/3, the other nine 3/3. Cost per
   accepted change: none accepted. Retries: 0 model errors retried; fix rounds 0, 3 and 0. Manual
   interventions: 0. Tests written unprompted: 0, 0 and 0.
