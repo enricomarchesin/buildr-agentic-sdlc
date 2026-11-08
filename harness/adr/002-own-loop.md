@@ -89,7 +89,8 @@ changes. Three builds per version.
   from three builds to one in six.
 - **What is still not possible:** a claim that owning the loop makes the code better. On the held-out
   checks it did not, within what three builds show. And a build that is acted on beyond the review's threshold:
-  every review reported the F1.AC2 fault as medium, and the loop fixes only high issues.
+  the reviews of all three counted builds reported the F1.AC2 fault, mostly as medium, and the loop fixes only high
+  issues.
 - **Numbers**, from `CHANGELOG.md`: verification set, 3 builds: F1.AC2 0/3, the other nine 3/3. Cost per
   accepted change: none accepted. Retries: 0 model errors retried; fix rounds 0, 3 and 0. Manual
   interventions: 0. Tests written unprompted: 0, 0 and 0.
