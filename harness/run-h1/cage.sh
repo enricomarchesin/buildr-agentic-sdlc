@@ -117,7 +117,9 @@ prepare() {  # label sandbox workspace...
   done
   # Path rules are only enforced on a live request, so the rest is checked from inside: every
   # denylist entry must get 403, and the controls must not.
-  controls="https://proxy.golang.org/github.com/eclipse/paho.golang/@v/list https://github.com/eclipse/paho.golang"
+  # The control for GitHub is a page of this repository by default. HEATCTL_GITHUB_CONTROL names another URL on
+  # github.com that must answer 2xx or 3xx, for a day when the pages are down and the rest is not.
+  controls="https://proxy.golang.org/github.com/eclipse/paho.golang/@v/list ${HEATCTL_GITHUB_CONTROL:-https://github.com/eclipse/paho.golang}"
   # A control that fails is asked again a few times before it counts: the upstream can answer 504 to
   # a request that nothing in this cage had a say in. The denylist is asked once and must get 403.
   sbx exec "$sb" sh -c 'for u; do for try in 1 2 3 4 5 6; do c=$(curl -s -o /dev/null -m 20 -w "%{http_code}" "$u"); case $c in 2*|3*) break;; esac; sleep 10; done; echo "$c $u"; done' \
