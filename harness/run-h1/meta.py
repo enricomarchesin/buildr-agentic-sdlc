@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import reviews
+from agent import instructions_source
 
 HERE = Path(__file__).resolve().parent
 USAGE_KEYS = ('input_tokens', 'cache_write_tokens', 'cache_read_tokens', 'output_tokens')
@@ -82,6 +83,7 @@ def write(d: Path, run: str, spec: Path, model: str, status: str) -> None:
         'from_repo': text(d / 'from.txt'),
         'spec': {'version': spec_version, 'sha256': hashlib.sha256(spec_bytes).hexdigest()},
         'framework': {p: version(p) for p in ('pydantic-ai-slim', 'pydantic-ai-harness')},
+        'instructions': instructions_source(),
         'sbx': sbx_version.splitlines()[0] if sbx_version else None,
         'template': [line for line in sh('sbx', 'template', 'ls').splitlines() if 'claude-code' in line],
         'exit_status': int(status),

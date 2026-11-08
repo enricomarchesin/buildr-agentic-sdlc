@@ -22,6 +22,8 @@
 #   HEATCTL_FROM_REPO       start from an earlier run's repository instead of an empty one, and
 #                           skip the build session: for trying the review and fix rounds again.
 #                           Its committed history is copied; its SPEC.md must match SPEC.
+#   HEATCTL_INSTRUCTIONS_FILE  replace the coder's instructions with the text of this file, for a run
+#                           that asks what the instructions do; unset, the framework's are used
 #   HEATCTL_CHECK_ONLY      set to 1 to prepare both sandboxes, check their network rules, and
 #                           stop there: no session runs and nothing is spent on the model.
 #

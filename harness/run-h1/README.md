@@ -37,6 +37,14 @@ tests/          the harness's own tests
 Shared with H0 and tested to stay so: the three prompts and the two network lists are the same
 bytes (`tests/test_prompts.py`), and a prompt is built the way H0's shell built it.
 
+## Asking what the instructions do
+
+The coder's instructions are the framework's own, and they are part of the loop: they tell the model
+to check its work with inline scripts, add no tests where the project has none, and delete scratch
+files. `HEATCTL_INSTRUCTIONS_FILE` replaces them with the text of a file, so that a run can hold the
+loop, the tools and the model still and change the words. Unset, nothing changes. The file's name and
+hash go in `meta.json`, under `instructions`.
+
 ## Running
 
 ```
