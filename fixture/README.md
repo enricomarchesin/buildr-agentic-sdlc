@@ -17,6 +17,31 @@ source of any one build. Builds are archived per harness version and run id.
 - Hard limits live outside every build: an automatic off timer configured by hand on each
   Shelly relay, and the boiler's own safety. `heatctl` never changes device configuration.
 
+## Zigbee sensors
+
+The spec reads a Zigbee sensor's temperature from what Zigbee2MQTT publishes, and counts
+every payload with a numeric `temperature` as a new reading. That holds only if Zigbee2MQTT
+is set up for it, so the house needs three things outside every build. All three were found
+in the first build's soak, in November 2026; the spec is unchanged.
+
+- **Zigbee2MQTT publishes only what it just received**: `advanced.cache_state: false`. Its
+  default, `true`, sends a device's whole last-known state with every message, so a message
+  that carries only battery, light level or presence also carries the last temperature, and
+  a controller cannot tell it from a new one. In the soak, a room read 22.2 °C for 16 hours
+  with the heating off while it had fallen to about 19.
+- **Each sensor reports its temperature at most every 5 minutes**: in Zigbee2MQTT's
+  Reporting settings, `msTemperatureMeasurement`, maximum interval 300 s, minimum 30 s,
+  reportable change 10 (0.10 °C). A battery sensor must be woken, with its button, for the
+  setting to reach it. Without it, a steady room reported once an hour, longer than
+  `stale_after`.
+- **Each sensor's Zigbee parent is a router that is always powered**, never a bulb switched
+  at the wall. A battery sensor whose parent loses power is cut off until it rejoins; in the
+  soak, three sensors went silent together for hours that way. Zigbee2MQTT's network map shows
+  the parent; to move a sensor, re-pair it with joining allowed only through the chosen router.
+
+With `cache_state` off, most messages carry no temperature. A build ignores them, as the spec
+requires, and may log each one.
+
 ## Logging
 
 Every build must write one structured event per control cycle to its application log, as a
