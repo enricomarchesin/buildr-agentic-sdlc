@@ -118,8 +118,12 @@ prepare() {  # label sandbox workspace...
   # Path rules are only enforced on a live request, so the rest is checked from inside: every
   # denylist entry must get 403, and the controls must not.
   controls="https://proxy.golang.org/github.com/eclipse/paho.golang/@v/list https://github.com/eclipse/paho.golang"
+  # A control that fails is asked again a few times before it counts: the upstream can answer 504 to
+  # a request that nothing in this cage had a say in. The denylist is asked once and must get 403.
+  sbx exec "$sb" sh -c 'for u; do for try in 1 2 3 4 5 6; do c=$(curl -s -o /dev/null -m 20 -w "%{http_code}" "$u"); case $c in 2*|3*) break;; esac; sleep 10; done; echo "$c $u"; done' \
+    sh $controls >"$dir/$label-reach-check.txt" 2>"$dir/$label-reach-check.err"
   sbx exec "$sb" sh -c 'for u; do echo "$(curl -s -o /dev/null -m 20 -w "%{http_code}" "$u") $u"; done' \
-    sh $controls $(denied_urls) >"$dir/$label-reach-check.txt" 2>"$dir/$label-reach-check.err"
+    sh $(denied_urls) >>"$dir/$label-reach-check.txt" 2>>"$dir/$label-reach-check.err"
   reach_ok "$dir/$label-reach-check.txt" $controls || die "reach check failed: $dir/$label-reach-check.txt"
 
   sbx policy log "$sb" --json >"$dir/$label-network-before.json"
