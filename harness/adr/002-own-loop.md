@@ -46,7 +46,8 @@ spec, prompts, network lists, review and fix rounds and held-out checks are H0's
 changes. Three builds per version.
 
 - **The agent** (`harness/run-h1/agent.py`): the framework's coder with no delegates and free to reach any
-  path in its sandbox, as Claude Code could.
+  path in its sandbox, as Claude Code could. Its tools are the biggest difference from H0: six (read, write
+  and edit a file, list files, search, a shell) against Claude Code's many, each described at length.
 - **What the model is asked.** Read off a request of Claude Code and set to match: adaptive thinking with the
   text left out of the response, effort medium, 128,000 output tokens, streaming, and the two beta features
   that change behaviour. Sent unset, the model thought without a limit and spent a whole response on it
@@ -86,7 +87,9 @@ changes. Three builds per version.
   instructions in one place we can change. The loop's stop rules, retry and record are tested in seconds
   (36 tests). The instructions can be replaced from a file to ask what they do. When they were removed,
   every build left tests (6 of 6, against none of three with them) and the scratch end-to-end check fell
-  from three builds to one in six.
+  from three builds to one in six. The tools stayed the framework's six in those runs, and Claude Code's
+  own tool descriptions were not there, so the result says what the instructions do and not what Claude
+  Code would do.
 - **What is still not possible:** a claim that owning the loop makes the code better. On the held-out checks it
   did not, within what three builds show. And a review whose labels follow its own prompt: the prompt calls an
   unmet requirement high and gives `validate` accepting what section 4 rejects as its example, yet of the three
