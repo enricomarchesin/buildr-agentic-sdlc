@@ -3,7 +3,7 @@
 Version: H0
 Axis: baseline
 Date: 2026-11-04
-Status: proposed
+Status: accepted
 
 ## Context
 
@@ -67,7 +67,9 @@ the repository is read-only. The held-out checks grade the result, three builds 
   F5.AC1, F5.AC3, F6.AC1, F6.AC6, F6.AC7 and C5 3/3. Every build stopped after its first
   review, with no high issue: no fix round, no retry, no manual intervention. Cost per build
   $1.21 to $1.65, sandbox overhead 33 to 35 s. Tests written unprompted: 3, 6 and 10 test
-  functions. Cost per accepted change once the soak has accepted a build.
+  functions. Cost per accepted change $4.12: the three builds' cost, with one accepted. Build 3
+  passed its soak in the house, 6 to 10 November 2026, and is the first accepted build
+  (`fixture/DEPLOYED.md`).
 
 ## If your product differs
 

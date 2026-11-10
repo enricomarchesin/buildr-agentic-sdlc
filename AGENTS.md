@@ -32,9 +32,8 @@ harness/
   adr/000-template.md   template for the one ADR per version
 fixture/
   README.md             deployment in the house, hard limits, logging and rsyslog forwarding
+  DEPLOYED.md           which build runs in the house, since when, and its soak
 ```
-
-Referenced but not created yet: `fixture/DEPLOYED.md`.
 
 ## Rules that are easy to break
 
