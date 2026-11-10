@@ -23,7 +23,7 @@ fails.
 | Relays | two Shelly 1 Mini Gen3, firmware 2.0.3, one per zone; `auto_off` set by hand to 1800 s on each, the hard limit |
 | Sensors | Zigbee through Zigbee2MQTT 2.14.3: two Shelly BLU H&T Display ZB (studio, bedroom), one Sonoff SNZB-02D (bathroom, since 8 November) |
 | Zones | `day`: studio and bedroom; `bath`: bathroom |
-| Targets | 19.0, the studio 21.0 on weekdays from 09:00 to 13:00 and 14:30 to 19:30; hysteresis 0.3 since 8 November |
+| Targets | 19.0, the studio 21.0 on weekdays from 09:00 to 13:00 and 14:30 to 19:30; the bedroom 17.0 from 08:00 to 21:00 every day since 10 November, after the soak; hysteresis 0.3 since 8 November |
 
 ## The soak
 
