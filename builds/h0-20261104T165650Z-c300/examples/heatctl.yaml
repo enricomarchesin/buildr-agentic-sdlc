@@ -1,0 +1,40 @@
+unit: C
+
+mqtt:
+  broker: tcp://192.168.1.10:1883
+  client_id: heatctl
+  zigbee2mqtt_topic: zigbee2mqtt
+
+control:
+  cycle_interval: 60s
+  hysteresis: 0.5
+  stale_after: 45m
+  min_switch_interval: 5m
+  relay_lease: 15m
+  startup_grace: 2m
+  confirm_timeout: 30s
+
+zones:
+  - id: ground
+    relay:
+      device: shellyplus1-a8032ab1c2d3
+      switch: 0
+    rooms:
+      - id: living
+        schedule:
+          - { from: "06:30", target: 21.0, days: [mon, tue, wed, thu, fri] }
+          - { from: "08:00", target: 21.0, days: [sat, sun] }
+          - { from: "22:30", target: 18.0 }
+        sensors:
+          - { device: shellyhtg3-84fce63a1b2c, component: 0 }
+          - { zigbee: living-display }
+      - id: hallway
+  - id: upstairs
+    relay:
+      device: shellypro4pm-f008d1d8b8b8
+      switch: 2
+    rooms:
+      - id: bedroom
+        target: 19.0
+        sensors:
+          - { zigbee: bedroom-display }

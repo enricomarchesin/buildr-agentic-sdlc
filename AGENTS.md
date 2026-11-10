@@ -33,6 +33,9 @@ harness/
 fixture/
   README.md             deployment in the house, hard limits, logging and rsyslog forwarding
   DEPLOYED.md           which build runs in the house, since when, and its soak
+builds/
+  README.md             the accepted builds, one row each
+  <run id>/             an accepted build's source, as the harness left it, never edited
 ```
 
 ## Rules that are easy to break

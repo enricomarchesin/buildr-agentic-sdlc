@@ -2,7 +2,8 @@
 
 The heating app. Nobody writes it by hand: every build produces it from an empty repo and
 the complete spec in `spec/`. This directory holds what runs in the house and how, not the
-source of any one build. Builds are archived per harness version and run id.
+source of any one build. Builds are archived per harness version and run id; the source of
+every accepted build is in `builds/`, as the harness left it.
 
 ## Deployment
 

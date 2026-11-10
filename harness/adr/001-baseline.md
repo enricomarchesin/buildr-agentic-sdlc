@@ -69,7 +69,7 @@ the repository is read-only. The held-out checks grade the result, three builds 
   $1.21 to $1.65, sandbox overhead 33 to 35 s. Tests written unprompted: 3, 6 and 10 test
   functions. Cost per accepted change $4.12: the three builds' cost, with one accepted. Build 3
   passed its soak in the house, 6 to 10 November 2026, and is the first accepted build
-  (`fixture/DEPLOYED.md`).
+  (`fixture/DEPLOYED.md`); its source is in `builds/h0-20261104T165650Z-c300/`.
 
 ## If your product differs
 

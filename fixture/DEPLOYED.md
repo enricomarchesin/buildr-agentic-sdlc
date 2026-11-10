@@ -8,7 +8,7 @@ fails.
 
 | | |
 |---|---|
-| Build | build 3 of H0, run `h0-20261104T165650Z-c300`, Claude Code with Sonnet 5.5, spec 1.0 |
+| Build | build 3 of H0, run `h0-20261104T165650Z-c300`, Claude Code with Sonnet 5.5, spec 1.0; its source in [`builds/`](../builds/h0-20261104T165650Z-c300/) |
 | Running since | 6 November 2026, 22:57 UTC |
 | Soak | 6 to 10 November 2026, passed |
 | Accepted | 10 November 2026, the first accepted build |

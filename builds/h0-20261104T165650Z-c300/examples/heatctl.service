@@ -1,0 +1,23 @@
+[Unit]
+Description=heatctl heating controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/heatctl run /etc/heatctl/heatctl.yaml
+Restart=always
+RestartSec=5
+User=heatctl
+Group=heatctl
+# creates /run/heatctl, where the status socket lives
+RuntimeDirectory=heatctl
+RuntimeDirectoryMode=0750
+# heatctl writes nothing to disk except that socket
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
