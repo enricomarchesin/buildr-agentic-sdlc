@@ -52,8 +52,9 @@ in, check the house, and check that each setting holds, not only that it was sen
 - **Each sensor's parent**, in a fresh network map: an always-powered router.
 - **An hour of reports from each sensor**, in Zigbee2MQTT's log or on the broker: a
   temperature at least every 5 minutes from a steady room. Zigbee2MQTT shows the reporting it
-  configured, not what the sensor keeps; one sensor in the first soak went back to hourly after
-  a few hours.
+  configured, not what the sensor keeps: in the first soak, one sensor went back to hourly
+  every time it rejoined the network, and Zigbee2MQTT did not send the setting again. Look for
+  its rejoins (`device_announce` in Zigbee2MQTT's log) as well as its reports.
 - **`cache_state` off**, and a message without a temperature carrying none.
 - **Each sensor where the room is**: away from the radiator, lamps, screens and sun, at about
   sitting height. In the first soak, a studio sensor read about a degree warm until it was moved.

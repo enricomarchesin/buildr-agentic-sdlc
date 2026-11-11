@@ -40,7 +40,10 @@ The build did what the spec says throughout. Every problem in the soak was the h
 
 ## Known in the house
 
-- The bathroom's Sonoff SNZB-02D loses its temperature reporting setting after a few hours
-  and falls back to about one report an hour when the room is steady, so the bath zone is
-  held off for about a quarter of an hour, roughly once an hour. It costs nothing while the
-  bathroom is warm; a sensor that keeps the setting would end it.
+- The bathroom's Sonoff SNZB-02D loses its temperature reporting setting each time it rejoins
+  the network, and falls back to about one report an hour when the room is steady, so the bath
+  zone is held off for about a quarter of an hour, roughly once an hour. Zigbee2MQTT still lists
+  the setting and does not send it again. The setting held for 22.5 hours and for 5 hours, each
+  time until a rejoin; its link to its router is the weakest of the three sensors'. It costs
+  nothing while the bathroom is warm. A router nearer the bathroom, the setting sent again after
+  each rejoin, or a second sensor in the room would end it.
