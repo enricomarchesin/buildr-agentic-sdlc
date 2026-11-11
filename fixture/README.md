@@ -34,8 +34,11 @@ in the first build's soak, in November 2026; the spec is unchanged.
   Reporting settings, `msTemperatureMeasurement`, maximum interval 300 s, minimum 30 s,
   reportable change 10 (0.10 °C). A battery sensor must be woken, with its button, for the
   setting to reach it. Without it, a steady room reported once an hour, longer than
-  `stale_after`. Check that it holds: one sensor in the soak kept it for a few hours only,
-  then went back to hourly (`DEPLOYED.md`).
+  `stale_after`. Check that it holds: one sensor in the soak lost it every time it rejoined
+  the network, and Zigbee2MQTT did not send it again. For such a sensor, send the setting
+  again on each rejoin: an automation on Zigbee2MQTT's `bridge/event` for its
+  `device_announce`, publishing the same `device/reporting/configure` request a few seconds
+  later, while the sensor is awake (`DEPLOYED.md`).
 - **Each sensor's Zigbee parent is a router that is always powered**, never a bulb switched
   at the wall. A battery sensor whose parent loses power is cut off until it rejoins; in the
   soak, three sensors went silent together for hours that way. Zigbee2MQTT's network map shows

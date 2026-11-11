@@ -44,6 +44,9 @@ The build did what the spec says throughout. Every problem in the soak was the h
   the network, and falls back to about one report an hour when the room is steady, so the bath
   zone is held off for about a quarter of an hour, roughly once an hour. Zigbee2MQTT still lists
   the setting and does not send it again. The setting held for 22.5 hours and for 5 hours, each
-  time until a rejoin; its link to its router is the weakest of the three sensors'. It costs
-  nothing while the bathroom is warm. A router nearer the bathroom, the setting sent again after
-  each rejoin, or a second sensor in the room would end it.
+  time until a rejoin. The other two sensors rejoin as often and keep theirs.
+  **Fixed 11 November 2026**: a Home Assistant automation sends the setting again a few seconds
+  after each rejoin, while the sensor is still awake. Tested on a rejoin forced by taking the
+  battery out: the setting accepted 4 seconds after it, then a steady room reported every 5
+  minutes. Why the sensors rejoin, often several within minutes, is not known: the router they
+  share, or the coordinator, rather than the bathroom's signal.
