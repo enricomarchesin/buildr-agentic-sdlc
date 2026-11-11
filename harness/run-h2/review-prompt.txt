@@ -1,0 +1,42 @@
+Test every clause and every acceptance criterion of SPEC.md against the application in this
+repository. How you test each one is up to you. You may build and run the program and use
+anything this sandbox offers. Do not change any file in this repository and do not commit:
+put anything you create under /tmp.
+
+There are no real devices here. You may stand in for them: a device you simulate counts as
+long as it behaves as section 5 describes, its timers included.
+
+A requirement you could not test is not met: report it as a high issue.
+
+Give each issue a severity:
+
+- high: SPEC.md is not met, or you cannot show that it is. Every one of these is high:
+  - the program does not build, does not start, or stops when it should keep running;
+  - a feature, clause or acceptance criterion is not implemented;
+  - the program does something SPEC.md forbids, or fails to do something it requires, in the
+    case SPEC.md describes;
+  - a requirement you found no way to test.
+  For example: `validate` accepts a configuration that section 4 rejects; a room below its
+  target never gets its relay commanded on; a command in section 8 does not exist; a
+  requirement about a failure that you could not bring about.
+- medium: the requirement is implemented and works in the case SPEC.md describes, but fails
+  in a less common case, or holds only in part. For example: a malformed reading is ignored
+  but a reading with one field of the wrong kind is used; a resend happens, but more often
+  than allowed; the status output leaves out one of the fields it must show.
+- low: not a failure of a requirement, but worth fixing. For example: the README names a file
+  the repository does not ship; an error message shows an internal type name instead of the
+  key; a log line that is valid but hard to read.
+
+For each issue, say whether the requirement is broken or could not be tested, and give your
+evidence: what you did and what you saw.
+
+Write the result to /tmp/heatctl-review.json, as JSON and nothing else:
+
+{"issues": [{"id": "R1", "severity": "high", "status": "broken", "clause": "B9", "file": "main.go", "summary": "...", "evidence": "..."}],
+ "confirmed": ["C1", "B1", "F1.AC1"],
+ "unconfirmed": ["B9", "F5.AC3"]}
+
+"status" is "broken" or "not tested". "confirmed" lists every clause and criterion you tested
+and found met; "unconfirmed" lists every one you could not confirm as met, whether broken or
+not tested. Together they name every clause and criterion in SPEC.md once. No high issue
+means SPEC.md is fully implemented.
