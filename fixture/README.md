@@ -44,6 +44,21 @@ in the first build's soak, in November 2026; the spec is unchanged.
 With `cache_state` off, most messages carry no temperature. A build ignores them, as the spec
 requires, and may log each one.
 
+## Before a soak
+
+The first soak spent its first two days testing the house, not the build. Before a build goes
+in, check the house, and check that each setting holds, not only that it was sent:
+
+- **Each sensor's parent**, in a fresh network map: an always-powered router.
+- **An hour of reports from each sensor**, in Zigbee2MQTT's log or on the broker: a
+  temperature at least every 5 minutes from a steady room. Zigbee2MQTT shows the reporting it
+  configured, not what the sensor keeps; one sensor in the first soak went back to hourly after
+  a few hours.
+- **`cache_state` off**, and a message without a temperature carrying none.
+- **Each sensor where the room is**: away from the radiator, lamps, screens and sun, at about
+  sitting height. In the first soak, a studio sensor read about a degree warm until it was moved.
+- **The relays' own off timers**, read back from each relay.
+
 ## Logging
 
 Every build must write one structured event per control cycle to its application log, as a
