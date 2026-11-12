@@ -60,7 +60,9 @@ hidden from the agent.
 1. **Setup.** A fresh MQTT broker and the build, nothing else. The check plays the devices:
    it publishes sensor readings and listens on actuator topics, as listed in
    section 5 of `spec/SPEC.md`.
-2. **Operator.** A pinned grading model installs the build by following its README, then,
+2. **Operator.** A pinned grading model installs the build by following its README. When the
+   README cannot install it, that is recorded once as a docs failure, and the model builds the
+   program from its source instead, so that the checks still run. Then,
    from the README alone and without the source, writes down the commands each step of a
    scenario needs. The check runs those commands on the scenario's timeline, so its timing is
    exact. A check that fails is run again with commands the model works out from the
