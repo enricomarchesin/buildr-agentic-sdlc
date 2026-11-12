@@ -8,11 +8,11 @@ fails.
 
 | | |
 |---|---|
-| Build | build 3 of H0, run `h0-20261104T165650Z-c300`, Claude Code with Sonnet 5.5, spec 1.0; its source in [`builds/`](../builds/h0-20261104T165650Z-c300/) |
-| Running since | 6 November 2026, 22:57 UTC |
-| Soak | 6 to 10 November 2026, passed |
-| Accepted | 10 November 2026, the first accepted build |
-| Before it | the house's own controls |
+| Build | `h2-20261111T232420Z-0559`, H2 with Gemini 4 Carbon, spec 1.0, the one-line instructions; chosen by the code rubric over the other eligible build and over `c300` |
+| Running since | 12 November 2026, 14:43:44 UTC |
+| Soak | from 12 November 2026, in progress |
+| Accepted | not yet |
+| Before it | build 3 of H0, run `h0-20261104T165650Z-c300`, accepted 10 November 2026; kept on the Pi as `/usr/local/bin/heatctl.c300`, to roll back to |
 
 ## The house it runs in
 
