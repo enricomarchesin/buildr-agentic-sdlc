@@ -8,18 +8,13 @@
 #
 #   harness/run-h0/build.sh [SPEC]        default: spec/SPEC.md in this repository
 #
-#   HEATCTL_AUTH            key (default): the build key, for the model proxy. subscription: the
-#                           token of a Claude subscription, from `claude setup-token`, used against
-#                           Anthropic's API directly, https://api.anthropic.com; no proxy
-#   HEATCTL_MODEL_URL       required with the build key: base URL of the model proxy,
-#                           http://host:port. Claude Code talks to it in Anthropic's format; it is
-#                           the only private address a build reaches, by exact host and port.
-#                           Not used with the subscription
+#   HEATCTL_MODEL_URL       required: base URL of the model proxy, http://host:port. Claude Code
+#                           talks to it in Anthropic's format; it is the only private address
+#                           a build reaches, by exact host and port
 #   HEATCTL_MODEL           default claude-sonnet-5-5, as the proxy names it
 #   HEATCTL_SMALL_MODEL     the model Claude Code uses for background tasks, default HEATCTL_MODEL
-#   HEATCTL_KEY_COMMAND     host command printing the build key for the proxy, or the subscription's
-#                           token; default reads the macOS Keychain item heatctl-build, or
-#                           heatctl-subscription
+#   HEATCTL_KEY_COMMAND     host command printing the build key for the proxy; default reads the
+#                           macOS Keychain item heatctl-build
 #   HEATCTL_MUST_NOT_REACH  host:port pairs, space-separated, that must be refused, such as the
 #                           house's broker; kept out of this file
 #   HEATCTL_BUILDS          archive root, default ~/heatctl-builds
@@ -43,18 +38,11 @@ env_file=${HEATCTL_ENV:-$HOME/.config/heatctl/build.env}
 [ ! -f "$env_file" ] || . "$env_file"
 here=$(cd "$(dirname "$0")" && pwd)
 spec=${1:-$here/../../spec/SPEC.md}
-auth=${HEATCTL_AUTH:-key}
-case $auth in  # the variable Claude Code reads the credential from, and where it is kept
-  key) key_env=ANTHROPIC_API_KEY; key_item=heatctl-build ;;
-  subscription) key_env=CLAUDE_CODE_OAUTH_TOKEN; key_item=heatctl-subscription
-    HEATCTL_MODEL_URL=https://api.anthropic.com ;;
-  *) die "HEATCTL_AUTH is key or subscription, not $auth" ;;
-esac
 model_url=${HEATCTL_MODEL_URL:?set HEATCTL_MODEL_URL to the model proxy, http://host:port}
 model=${HEATCTL_MODEL:-claude-sonnet-5-5}
 small_model=${HEATCTL_SMALL_MODEL:-$model}
 timeout=${HEATCTL_TIMEOUT:-14400}
-key_command=${HEATCTL_KEY_COMMAND:-/usr/bin/security find-generic-password -a $USER -s $key_item -w}
+key_command=${HEATCTL_KEY_COMMAND:-/usr/bin/security find-generic-password -a $USER -s heatctl-build -w}
 must_not_reach=${HEATCTL_MUST_NOT_REACH:-}
 from=${HEATCTL_FROM_REPO:-}
 export SBX_NO_TELEMETRY=1
@@ -86,7 +74,6 @@ else
 fi
 trap cleanup EXIT
 echo "$global" | sed '/^$/d' >"$dir/global-secrets.txt"
-echo "$auth" >"$dir/auth.txt"
 
 mark start
 prepare build "$run" "$repo"
