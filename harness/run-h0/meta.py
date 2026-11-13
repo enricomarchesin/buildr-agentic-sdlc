@@ -100,6 +100,7 @@ def write(d, run, spec, model, small_model, status):
         "claude_code": text("claude-version.txt"),
         "sbx": sbx_version.splitlines()[0] if sbx_version else None,
         "template": [l for l in sh("sbx", "template", "ls").splitlines() if "claude-code" in l],
+        "template_used": text("template.txt") or None,  # None: the agent's own
         "exit_status": int(status), "timed_out": os.path.exists(path("timeout")),
         "seconds": seconds,
         "result": totals,

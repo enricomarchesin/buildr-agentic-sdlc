@@ -88,7 +88,7 @@ prepare() {  # label sandbox workspace...
   sbx secret set-custom --sandbox "$sb" --host "$model_host" --env ANTHROPIC_API_KEY \
     --placeholder "heatctl-build-$sb" --command "$key_command" >/dev/null 2>&1 \
     || die "the key command failed: $key_command"
-  sbx create --name "$sb" --pull "${HEATCTL_PULL:-never}" claude "$@" >"$dir/$label-sbx-create.log" 2>&1 \
+  sbx create --name "$sb" --pull "${HEATCTL_PULL:-never}" ${HEATCTL_TEMPLATE:+-t "$HEATCTL_TEMPLATE"} claude "$@" >"$dir/$label-sbx-create.log" 2>&1 \
     || die "could not create the $label sandbox: $dir/$label-sbx-create.log"
   sbx policy allow network --sandbox "$sb" "$(paste -s -d, - <"$here/allowlist.txt"),$model_host:$model_port" >/dev/null
 

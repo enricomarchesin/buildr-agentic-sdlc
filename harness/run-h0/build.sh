@@ -21,6 +21,8 @@
 #   HEATCTL_TIMEOUT         seconds before the build is stopped, default 14400
 #   HEATCTL_PULL            sandbox image pull policy, default never: every build of a version
 #                           runs on the same image. Use missing for the very first build.
+#   HEATCTL_TEMPLATE        the sandbox template, default the agent's own; a template saved with
+#                           sbx template save, for a newer Claude Code than the agent's image has
 #   HEATCTL_FROM_REPO       start from an earlier run's repository instead of an empty one, and
 #                           skip the build session: for trying the review and fix rounds again.
 #                           Its committed history is copied; its SPEC.md must match SPEC.
@@ -74,6 +76,7 @@ else
 fi
 trap cleanup EXIT
 echo "$global" | sed '/^$/d' >"$dir/global-secrets.txt"
+echo "${HEATCTL_TEMPLATE:-}" >"$dir/template.txt"
 
 mark start
 prepare build "$run" "$repo"
