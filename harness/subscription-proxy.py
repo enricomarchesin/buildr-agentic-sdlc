@@ -14,6 +14,11 @@ sandbox's proxy swaps in from its placeholder.
                             reads the macOS Keychain item heatctl-subscription
     HEATCTL_PROXY_KEY       file holding the local key, made on first start; default
                             ~/.config/heatctl/subscription-proxy.key
+    HEATCTL_PROXY_MODELS    the models a build may ask for, space-separated; default any. Claude
+                            Code answers a refusal by asking another model, unasked; a model not
+                            on this list gets an error instead, so the build stays one model's
+    HEATCTL_PROXY_DUMP      a directory: the body and headers of every refused or failed request
+                            are kept there, the credentials left out
 
 It answers /health/liveliness, which H0 tries as a control, and refuses everything outside /v1/,
 the proxy's admin routes among them. One line per request goes to LOG: the time, the build's
@@ -37,6 +42,7 @@ if not os.path.exists(key_path):
     os.write(fd, secrets.token_hex(24).encode())
     os.close(fd)
 KEY = open(key_path).read().strip()
+MODELS = set(os.environ.get("HEATCTL_PROXY_MODELS", "").split())
 lock = threading.Lock()
 context = ssl.create_default_context()
 
@@ -95,6 +101,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.reply(401, {"error": "wrong key"})
         if not self.path.startswith("/v1/"):
             return self.reply(403, {"error": "only /v1/ is forwarded"})
+        asked = None
+        try:
+            asked = json.loads(body).get("model") if body else None
+        except (ValueError, AttributeError):
+            pass
+        if MODELS and asked and asked not in MODELS:
+            self.log({"time": round(start, 3), "tags": self.headers.get("x-litellm-tags"), "method": self.command,
+                      "path": self.path, "status": 400, "model": asked, "refused_by_proxy": True}, body)
+            return self.reply(400, {"type": "error", "error": {"type": "invalid_request_error",
+                                    "message": f"the subscription proxy does not pass {asked}"}})
         headers = {k: v for k, v in self.headers.items() if k.lower() not in DROP}
         betas = [b.strip() for b in (self.headers.get("anthropic-beta") or "").split(",") if b.strip()]
         headers["anthropic-beta"] = ",".join(betas + [OAUTH_BETA] * (OAUTH_BETA not in betas))
@@ -128,8 +144,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "tags": self.headers.get("x-litellm-tags"), "method": self.command, "path": self.path,
                 "status": r.status, "model": model, "stop_reason": stop,
                 "usage": usage}
+        self.log(line, body if stop == "refusal" or r.status >= 400 else None)
+
+    def log(self, line, kept_body=None):
         with lock, open(log_path, "a") as f:
             f.write(json.dumps(line) + "\n")
+        dump = os.environ.get("HEATCTL_PROXY_DUMP")
+        if dump and kept_body is not None:
+            name = os.path.join(dump, f"{line['time']:.3f}-{line.get('model')}-{line.get('stop_reason') or line['status']}")
+            with open(name + ".json", "wb") as f:
+                f.write(kept_body)
+            with open(name + ".headers.json", "w") as f:
+                json.dump({k: v for k, v in self.headers.items() if k.lower() not in ("authorization", "x-api-key")}, f, indent=1)
 
 
 server = http.server.ThreadingHTTPServer((address, port), Handler)
