@@ -8,6 +8,8 @@
 # The kit's MCP gateway is reachable from every sandbox and no policy closes it; it serves only
 # the MCP servers registered on this host, so none may be. Sets global: one "name host" a line.
 preflight() {
+  free=$(df -Pk "$HOME" | awk 'NR==2 {print int($4 / 1048576)}')
+  [ "$free" -ge "${HEATCTL_MIN_FREE_GB:-0}" ] || die "$free GB free on the disk, under HEATCTL_MIN_FREE_GB=$HEATCTL_MIN_FREE_GB"
   global=$(sbx secret ls --json | python3 -c '
 import sys, json
 known = {"anthropic": ["api.anthropic.com"], "openai": ["api.openai.com", "auth.openai.com", "chatgpt.com"],
@@ -88,7 +90,8 @@ prepare() {  # label sandbox workspace...
   sbx secret set-custom --sandbox "$sb" --host "$model_host" --env ANTHROPIC_API_KEY \
     --placeholder "heatctl-build-$sb" --command "$key_command" >/dev/null 2>&1 \
     || die "the key command failed: $key_command"
-  sbx create --name "$sb" --pull "${HEATCTL_PULL:-never}" ${HEATCTL_TEMPLATE:+-t "$HEATCTL_TEMPLATE"} claude "$@" >"$dir/$label-sbx-create.log" 2>&1 \
+  sbx create --name "$sb" --pull "${HEATCTL_PULL:-never}" ${HEATCTL_MEMORY:+--memory "$HEATCTL_MEMORY"} \
+    ${HEATCTL_TEMPLATE:+-t "$HEATCTL_TEMPLATE"} claude "$@" >"$dir/$label-sbx-create.log" 2>&1 \
     || die "could not create the $label sandbox: $dir/$label-sbx-create.log"
   sbx policy allow network --sandbox "$sb" "$(paste -s -d, - <"$here/allowlist.txt"),$model_host:$model_port" >/dev/null
 
