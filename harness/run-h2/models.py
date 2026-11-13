@@ -40,6 +40,9 @@ PROFILES = {
     'deepseek-v4.1-flash-1017': lambda: DeepSeekProvider.model_profile('deepseek-flash'),
     'glm-5.3': lambda: ZaiProvider.model_profile('glm-5.3'),
     'mimo-v2.6-pro': lambda: LiteLLMProvider.model_profile('mimo-v2.6-pro'),
+    # The two families' smaller models, added after the six were built, each with its family's profile.
+    'glm-5.3-flash': lambda: ZaiProvider.model_profile('glm-5.3-flash'),
+    'mimo-v2.6-flash': lambda: LiteLLMProvider.model_profile('mimo-v2.6-flash'),
 }
 """The builders other than Claude, as the proxy names them, and the profile the framework uses for each: how
 the model takes tool schemas and how its reasoning goes back to it. DeepSeek and GLM get their makers' own,
