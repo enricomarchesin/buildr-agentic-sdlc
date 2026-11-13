@@ -2,7 +2,8 @@
 
 H3 is `../run-h2/` with two local models added, reached through the same proxy in its OpenAI format
 (`models.py`, `LOCAL_MODELS`). What differs from H2: their output limit is 32,768 tokens and their request sends
-no `reasoning_effort` (`LOCAL_SETTINGS`); the run's time limit is 6 hours, not 4 (`HEATCTL_TIMEOUT`); run ids start `h3-`
+no `reasoning_effort` (`LOCAL_SETTINGS`), and the loop's two leading system messages go out as one
+(`local_profile`), since the models' chat template accepts a system message only first; the run's time limit is 6 hours, not 4 (`HEATCTL_TIMEOUT`); run ids start `h3-`
 and the proxy's tags say `harness=H3`. The text below is H1's, which H2 and H3 keep.
 
 H1: the same run as `../run-h0/`, with the loop ours. A Python agent loop on a pinned framework

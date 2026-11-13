@@ -69,6 +69,8 @@ def test_each_builder_is_reached_in_its_own_format(monkeypatch):
         local = models.build_model(run='r', session='s', model=model)
         assert str(local.client.base_url) == 'http://proxy.invalid:4000/v1/'
         assert local.profile.get('openai_chat_send_back_thinking_parts', 'auto') == 'auto'
+        # the loop's two leading system messages go out as one: the Qwen template accepts a system message only first
+        assert local.profile.get('openai_chat_supports_multiple_system_messages') is False
 
 
 def test_without_a_setting_the_coder_has_the_frameworks_own_instructions(monkeypatch):
