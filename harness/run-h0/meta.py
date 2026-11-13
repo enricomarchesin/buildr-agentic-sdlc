@@ -92,6 +92,7 @@ def write(d, run, spec, model, small_model, status):
     sbx_version = sh("sbx", "version")
     meta = {
         "run_id": run, "harness": "H0", "model": model, "small_model": small_model,
+        "auth": text("auth.txt") or "key",
         # The harness that ran, and whether its files differed from that commit.
         "harness_commit": sh("git", "-C", HERE, "rev-parse", "HEAD") or None,
         "harness_modified": bool(sh("git", "-C", HERE, "status", "--porcelain", "--", ".")),

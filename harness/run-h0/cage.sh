@@ -1,10 +1,12 @@
 # The cage, sourced by build.sh: the checks on this host before a run, the two sandboxes'
 # network rules and the checks that they hold, and their removal. Uses here, dir, run,
-# review_sb, model_url, model_host, model_port, key_command and must_not_reach from build.sh.
+# review_sb, model_url, model_host, model_port, auth, key_env, key_command and must_not_reach
+# from build.sh.
 
-# The only credential a build may use is the build key. A secret shared with every sandbox is
-# tolerated only if every host it is sent to is refused from the build's sandbox, which is
-# checked once the sandbox exists; a global secret whose hosts are not known stops the run.
+# The only credential a build may use is the build key, or the subscription's token. A secret
+# shared with every sandbox is tolerated only if every host it is sent to is refused from the
+# build's sandbox, which is checked once the sandbox exists; a global secret whose hosts are
+# not known stops the run.
 # The kit's MCP gateway is reachable from every sandbox and no policy closes it; it serves only
 # the MCP servers registered on this host, so none may be. Sets global: one "name host" a line.
 preflight() {
@@ -46,14 +48,14 @@ allowed() {  # sandbox target
   sbx policy check network --sandbox "$1" --json "$2" \
     | python3 -c 'import sys,json; sys.exit(0 if json.load(sys.stdin)["allowed"] else 1)'
 }
-kit_hosts() {  # sandbox: the hosts the agent kit allows on it that are not on the allowlist, comma-separated
+kit_hosts() {  # sandbox: the hosts the agent kit allows on it that are not on the allowlist or the model's, comma-separated
   sbx policy ls --source kit --json | python3 -c '
 import sys, json
-listed = {l.strip() for l in open(sys.argv[1]) if l.strip()}
+listed = {l.strip() for l in open(sys.argv[1]) if l.strip()} | {sys.argv[3]}
 hosts = {r.split(":")[0] for x in json.load(sys.stdin).get("rules", [])
          if x.get("applies_to") == "sandbox:" + sys.argv[2] and x.get("decision") == "allow"
          for r in x.get("resources", [])}
-print(",".join(sorted(hosts - listed)))' "$here/allowlist.txt" "$1"
+print(",".join(sorted(hosts - listed)))' "$here/allowlist.txt" "$1" "$model_host"
 }
 denied_urls() {  # every denylist entry as URLs, also in other cases and escapes
   grep -v '^#' "$here/denylist.txt" | python3 -c '
@@ -84,8 +86,9 @@ prepare() {  # label sandbox workspace...
   label=$1; sb=$2; shift 2
   # The build key never enters a sandbox: it sees a placeholder in ANTHROPIC_API_KEY, which the
   # sandbox proxy swaps for the key on requests to the model proxy. Scoped to the sandbox and
-  # set before it is created, so the variable exists from the start.
-  sbx secret set-custom --sandbox "$sb" --host "$model_host" --env ANTHROPIC_API_KEY \
+  # set before it is created, so the variable exists from the start. The subscription's token
+  # is kept the same way, in CLAUDE_CODE_OAUTH_TOKEN, swapped on requests to Anthropic's API.
+  sbx secret set-custom --sandbox "$sb" --host "$model_host" --env "$key_env" \
     --placeholder "heatctl-build-$sb" --command "$key_command" >/dev/null 2>&1 \
     || die "the key command failed: $key_command"
   sbx create --name "$sb" --pull "${HEATCTL_PULL:-never}" claude "$@" >"$dir/$label-sbx-create.log" 2>&1 \
@@ -111,21 +114,24 @@ prepare() {  # label sandbox workspace...
 
   # Fail closed: refuse to go on unless the sandbox reaches what it may install from, and not
   # the house's network, the kit's own hosts or anything on the denylist.
-  for h in example.com 10.0.0.1 172.16.0.1 192.168.1.1 169.254.169.254 api.anthropic.com \
+  for h in example.com 10.0.0.1 172.16.0.1 192.168.1.1 169.254.169.254 $(echo api.anthropic.com | grep -vx "$model_host") \
     "$model_host:22" $must_not_reach $(echo "$kit" | tr , ' ') $(echo "$global" | awk '{print $2}' | sort -u); do
     allowed "$sb" "$h" && die "$h is reachable from the $label sandbox"
   done
-  allowed "$sb" "$model_host:$model_port" || die "the model proxy $model_host:$model_port is not reachable"
+  allowed "$sb" "$model_host:$model_port" || die "the model's endpoint $model_host:$model_port is not reachable"
   # Path rules are only enforced on a live request, so the rest is checked from inside: every
-  # denylist entry must get 403, and the controls must not.
-  controls="https://proxy.golang.org/github.com/eclipse/paho.golang/@v/list https://github.com/eclipse/paho.golang $model_url/health/liveliness"
+  # denylist entry must get 403, and the controls must not. Anthropic's API has no open route
+  # to try; the first session shows it is reached.
+  controls="https://proxy.golang.org/github.com/eclipse/paho.golang/@v/list https://github.com/eclipse/paho.golang"
+  [ "$auth" = subscription ] || controls="$controls $model_url/health/liveliness"
   sbx exec "$sb" sh -c 'for u; do echo "$(curl -s -o /dev/null -m 20 -w "%{http_code}" "$u") $u"; done' \
     sh $controls $(denied_urls) >"$dir/$label-reach-check.txt" 2>"$dir/$label-reach-check.err"
   reach_ok "$dir/$label-reach-check.txt" $controls || die "reach check failed: $dir/$label-reach-check.txt"
 
-  # The build key reaches the model, and nothing it can do on the proxy goes beyond that.
-  admin=$(sbx exec -e "U=$model_url" "$sb" sh -c 'curl -s -m 20 -o /dev/null -w "%{http_code}" -X POST "$U/key/generate" -H "Authorization: Bearer $ANTHROPIC_API_KEY" -H "content-type: application/json" -d "{}"' 2>/dev/null)
-  case $admin in 401|403) ;; *) die "the build key can reach the proxy's admin routes from the $label sandbox (HTTP $admin)";; esac
+  # The build key reaches the model, and nothing it can do on the proxy goes beyond that. There
+  # is no proxy with the subscription.
+  [ "$auth" = subscription ] || admin=$(sbx exec -e "U=$model_url" "$sb" sh -c 'curl -s -m 20 -o /dev/null -w "%{http_code}" -X POST "$U/key/generate" -H "Authorization: Bearer $ANTHROPIC_API_KEY" -H "content-type: application/json" -d "{}"' 2>/dev/null)
+  [ "$auth" = subscription ] || case $admin in 401|403) ;; *) die "the build key can reach the proxy's admin routes from the $label sandbox (HTTP $admin)";; esac
   sbx policy log "$sb" --json >"$dir/$label-network-before.json"
 }
 
