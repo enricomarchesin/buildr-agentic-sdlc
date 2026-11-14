@@ -4,7 +4,11 @@ H3 is `../run-h2/` with two local models added, reached through the same proxy i
 (`models.py`, `LOCAL_MODELS`). What differs from H2: their output limit is 32,768 tokens and their request sends
 no `reasoning_effort` (`LOCAL_SETTINGS`), and the loop's two leading system messages go out as one
 (`local_profile`), since the models' chat template accepts a system message only first; the run's time limit is 6 hours, not 4 (`HEATCTL_TIMEOUT`); run ids start `h3-`
-and the proxy's tags say `harness=H3`. The text below is H1's, which H2 and H3 keep.
+and the proxy's tags say `harness=H3`. A local model's history is also summarised before its context window
+fills: at 90 % of the window, the newest 15 messages kept, the summary written by a model that does not think
+(`summary-prompt.txt`, `compaction` in `agent.py`), and the coder's own clearing of old tool results is off for it.
+Each model's window is in `models.py` (`CONTEXT_WINDOWS`), and `meta.json` records how a run kept its history in
+the window. The text below is H1's, which H2 and H3 keep.
 
 H1: the same run as `../run-h0/`, with the loop ours. A Python agent loop on a pinned framework
 (Pydantic AI, with its coding tools) runs on the host and reaches into the sandbox only for its

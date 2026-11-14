@@ -35,12 +35,43 @@ BETAS = 'interleaved-thinking-2025-05-14,effort-2025-11-24'
 effort. The rest of its list is about Claude Code's own features."""
 DEFAULT_KEY_COMMAND = f'/usr/bin/security find-generic-password -a {os.environ.get("USER", "")} -s heatctl-build -w'
 
-def local_profile(name: str) -> OpenAIModelProfile:
-    """The framework's Qwen profile, with one system message. The loop sends two at the start of every request (the
-    instructions, then the project's path), and the model's own chat template accepts a system message only at the
-    start of the conversation: its second one raises "System message must be at the beginning". The framework merges
-    consecutive leading system messages when the profile says the API takes only one."""
-    return OpenAIModelProfile(**(qwen_model_profile(name) or {}), openai_chat_supports_multiple_system_messages=False)
+LOCAL_MODELS = ('Qwen3.8-27B-ISTA-f16kv:thinking-medium', 'halogen-qwen3.8-flash-next')
+"""H3's two builders, as the proxy names them."""
+
+SUMMARY_MODELS = {
+    'Qwen3.8-27B-ISTA-f16kv:thinking-medium': 'Qwen3.8-27B-ISTA-f16kv:reasoning',
+    'halogen-qwen3.8-flash-next': 'halogen-qwen3.8-flash-next',
+}
+"""The model that writes the summary when a builder's context is compacted. The first builder's own name is an alias
+that sets thinking on and overrides what a request asks, so its summaries come from another alias of the same
+server that answers without thinking; the second honours `enable_thinking: false` itself."""
+
+CONTEXT_WINDOWS = {
+    'Qwen3.8-27B-ISTA-f16kv:thinking-medium': 147_456,
+    'Qwen3.8-27B-ISTA-f16kv:reasoning': 147_456,
+    'halogen-qwen3.8-flash-next': 262_144,
+}
+"""Each model's context window in tokens, read off its server (`--ctx-size`, and `/v1/models`). The framework assumes
+200,000 for a model it does not know, which for the first builder is past its real window."""
+CONTEXT_WINDOW_SETTING = 'HEATCTL_CONTEXT_WINDOW'
+"""Set to a number of tokens, it replaces every window above: for a run that tries compaction with a small one."""
+
+
+def context_window(model: str) -> int:
+    return int(os.environ.get(CONTEXT_WINDOW_SETTING) or CONTEXT_WINDOWS[model])
+
+
+def local_profile(name: str, model: str) -> OpenAIModelProfile:
+    """The framework's Qwen profile, with the model's real context window and one system message. The loop sends two
+    system messages at the start of every request (the instructions, then the project's path), and the first model's
+    chat template accepts a system message only at the start of the conversation: its second one raises "System
+    message must be at the beginning". The framework merges consecutive leading system messages when the profile
+    says the API takes only one."""
+    return OpenAIModelProfile(
+        **(qwen_model_profile(name) or {}),
+        openai_chat_supports_multiple_system_messages=False,
+        context_window=context_window(model),
+    )
 
 
 PROFILES = {
@@ -54,10 +85,10 @@ PROFILES = {
     'glm-5.3-flash': lambda: ZaiProvider.model_profile('glm-5.3-flash'),
     'mimo-v2.6-flash': lambda: LiteLLMProvider.model_profile('mimo-v2.6-flash'),
     # The two local models of H3, as the proxy names them, both Qwen 3.8, with the framework's profile for the family.
-    'Qwen3.8-27B-ISTA-f16kv:thinking-medium': lambda: local_profile('qwen3.8-27b'),
-    'halogen-qwen3.8-flash-next': lambda: local_profile('qwen3.8-flash-next'),
+    'Qwen3.8-27B-ISTA-f16kv:thinking-medium': lambda: local_profile('qwen3.8-27b', 'Qwen3.8-27B-ISTA-f16kv:thinking-medium'),
+    'Qwen3.8-27B-ISTA-f16kv:reasoning': lambda: local_profile('qwen3.8-27b', 'Qwen3.8-27B-ISTA-f16kv:reasoning'),
+    'halogen-qwen3.8-flash-next': lambda: local_profile('qwen3.8-flash-next', 'halogen-qwen3.8-flash-next'),
 }
-LOCAL_MODELS = ('Qwen3.8-27B-ISTA-f16kv:thinking-medium', 'halogen-qwen3.8-flash-next')
 """The builders other than Claude, as the proxy names them, and the profile the framework uses for each: how
 the model takes tool schemas and how its reasoning goes back to it. DeepSeek and GLM get their makers' own,
 which send the reasoning back in `reasoning_content`, as DeepSeek requires on every turn with tools; a name
@@ -109,7 +140,7 @@ def settings_for(model: str) -> AnthropicModelSettings | OpenAIChatModelSettings
         return CLAUDE_SETTINGS
     if model not in FAMILIES:
         raise ValueError(f'{model} is not one of the builders H3 knows: claude-*, {", ".join(FAMILIES)}')
-    if model in LOCAL_MODELS:
+    if model in LOCAL_MODELS or model in SUMMARY_MODELS.values():
         return LOCAL_SETTINGS
     return OTHER_SETTINGS
 

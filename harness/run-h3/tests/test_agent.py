@@ -5,7 +5,17 @@ from __future__ import annotations
 
 import pytest
 
-from models import BETAS, CLAUDE_SETTINGS as SETTINGS, FAMILIES, LOCAL_MODELS, LOCAL_SETTINGS, OTHER_SETTINGS, settings_for
+from models import (
+    BETAS,
+    CLAUDE_SETTINGS as SETTINGS,
+    CONTEXT_WINDOWS,
+    FAMILIES,
+    LOCAL_MODELS,
+    LOCAL_SETTINGS,
+    OTHER_SETTINGS,
+    SUMMARY_MODELS,
+    settings_for,
+)
 
 
 def test_the_output_limit_is_claude_codes():
@@ -27,7 +37,8 @@ def test_the_betas_that_change_the_models_behaviour_are_declared():
 def test_claude_gets_claude_codes_settings_and_the_others_reasoning_at_medium():
     assert settings_for('claude-sonnet-5-5') is SETTINGS
     for model in FAMILIES:
-        assert settings_for(model) is (LOCAL_SETTINGS if model in LOCAL_MODELS else OTHER_SETTINGS)
+        local = model in LOCAL_MODELS or model in SUMMARY_MODELS.values()
+        assert settings_for(model) is (LOCAL_SETTINGS if local else OTHER_SETTINGS)
     assert OTHER_SETTINGS == {'max_tokens': 128_000, 'openai_reasoning_effort': 'medium'}
 
 

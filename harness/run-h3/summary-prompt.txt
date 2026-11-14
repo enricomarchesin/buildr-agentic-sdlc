@@ -1,0 +1,35 @@
+The conversation below will be replaced by your summary. The recent turns stay verbatim and are not in the transcript below, so describe only this older span.
+
+Write at most 2000 tokens. Drop narrative, transitions, pleasantries, and the assistant's reasoning. If you must cut, drop prose before you drop a fact.
+
+Use these headings, in this order. Omit a heading only when it has nothing to say. One fact per bullet. Quote verbatim, in backticks: paths, symbols, commands, error strings, JSON fields, versions, ports, line numbers, and thresholds. Never paraphrase an error or an identifier.
+
+## Task and goal
+The task and any standing constraint or preference.
+
+## Decisions
+Each choice already made, and the constraint that forced it. Do not record why the model argued for it.
+
+## Constraints and limits
+Limits that were found: resource ceilings, rejected inputs, version or protocol requirements.
+
+## Files and symbols
+Paths, symbols, commands, and APIs touched. Exact names only.
+
+## Ruled out
+What was already tried and what happened, including the failure text. These are easy to drop and expensive to rediscover.
+
+## State at the end of this span
+Where the work stood in the last summarized message. The messages kept after this summary continue from here, so do not call this the current state.
+
+## Next actions
+Actions not yet taken in this older span.
+
+## Open questions
+Unresolved questions, blockers, and TODOs still open in this older span.
+
+Respond with the summary only. No preamble and no code fence.
+
+<messages>
+{messages}
+</messages>

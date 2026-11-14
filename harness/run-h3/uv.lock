@@ -237,7 +237,7 @@ wheels = [
 ]
 
 [[package]]
-name = "heatctl-run-h2"
+name = "heatctl-run-h3"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [

@@ -17,6 +17,8 @@
 #                           house's broker; kept out of this file
 #   HEATCTL_BUILDS          archive root, default ~/heatctl-builds
 #   HEATCTL_TIMEOUT         seconds before the run's last session is stopped, default 21600
+#   HEATCTL_CONTEXT_WINDOW  tokens; replaces the context window assumed for a local model, for a run
+#                           that tries summarising with a small one. Unset for every counted run
 #   HEATCTL_PULL            sandbox image pull policy, default never: every build of a version
 #                           runs on the same image. Use missing for the very first build.
 #   HEATCTL_FROM_REPO       start from an earlier run's repository instead of an empty one, and
