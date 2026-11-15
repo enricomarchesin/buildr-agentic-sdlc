@@ -8,11 +8,11 @@ fails.
 
 | | |
 |---|---|
-| Build | `h2-20261111T232420Z-0559`, H2 with Gemini 4 Carbon, spec 1.0, the one-line instructions; chosen by the code rubric over the other eligible build and over `c300` |
-| Running since | 12 November 2026, 14:43:44 UTC |
-| Soak | 12 to 15 November 2026 |
-| Accepted | 15 November 2026 |
-| Before it | build 3 of H0, run `h0-20261104T165650Z-c300`, accepted 10 November 2026; kept on the Pi as `/usr/local/bin/heatctl.c300`, to roll back to |
+| Build | `h0-20261113T121238Z-7d99`, H0 with Claude Code and Opus 5.5, spec 1.0; chosen by the code comparison, which it won in every pair |
+| Running since | 15 November 2026, 17:59:09 UTC |
+| Soak | from 15 November 2026, in progress |
+| Accepted | not yet |
+| Before it | `h2-20261111T232420Z-0559`, accepted 15 November 2026 after its soak; kept on the Pi as `/usr/local/bin/heatctl.0559`, to roll back to. `h0-20261104T165650Z-c300` remains `/usr/local/bin/heatctl.c300` |
 
 ## The house it runs in
 
@@ -51,6 +51,12 @@ No wrong decision, no restart the build caused, and no error event outside a del
 | 15 Nov 09:55 | Restarted by hand to load a Sunday override for the studio, a schedule change, not a fault; in control two minutes later, after `startup_grace` |
 
 No sensor went stale: the longest gap between readings was 10 minutes, inside `stale_after`.
+
+## The soak of `7d99`
+
+In progress from 15 November 2026, 17:59:09 UTC. The first control cycle at 18:00:57 UTC
+found all three rooms, left both relays off and reported no zone degraded. The day's Sunday
+afternoon override and its scheduled cleanup were removed before the soak started.
 
 ## Known in the house
 
