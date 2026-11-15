@@ -62,6 +62,8 @@ def test_the_first_local_model_is_summarised_by_the_alias_that_does_not_think():
     assert SUMMARY_MODELS['halogen-qwen3.8-flash-next'] == 'halogen-qwen3.8-flash-next'
     assert CONTEXT_WINDOWS['Qwen3.8-27B-ISTA-f16kv:thinking-medium'] == 147_456
     assert CONTEXT_WINDOWS['halogen-qwen3.8-flash-next'] == 262_144
+    assert SUMMARY_MODELS['ds4-deepseek-v4-flash'] == 'ds4-deepseek-v4-flash'
+    assert CONTEXT_WINDOWS['ds4-deepseek-v4-flash'] == 126_000
 
 
 def test_the_other_builders_keep_the_coders_own_clearing_and_have_no_summary(monkeypatch):

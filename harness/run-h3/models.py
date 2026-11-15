@@ -22,6 +22,7 @@ from openai import AsyncOpenAI
 from pydantic_ai.models import Model
 from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
+from pydantic_ai.profiles import merge_profile
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.profiles.qwen import qwen_model_profile
 from pydantic_ai.providers.anthropic import AnthropicProvider
@@ -35,21 +36,24 @@ BETAS = 'interleaved-thinking-2025-05-14,effort-2025-11-24'
 effort. The rest of its list is about Claude Code's own features."""
 DEFAULT_KEY_COMMAND = f'/usr/bin/security find-generic-password -a {os.environ.get("USER", "")} -s heatctl-build -w'
 
-LOCAL_MODELS = ('Qwen3.8-27B-ISTA-f16kv:thinking-medium', 'halogen-qwen3.8-flash-next')
-"""H3's two builders, as the proxy names them."""
+LOCAL_MODELS = ('Qwen3.8-27B-ISTA-f16kv:thinking-medium', 'halogen-qwen3.8-flash-next', 'ds4-deepseek-v4-flash')
+"""H3's builders, as the proxy names them: the two Qwen 3.8 models, then DeepSeek V4 Flash, served on halogen's
+machine by another engine with its own quantisation."""
 
 SUMMARY_MODELS = {
     'Qwen3.8-27B-ISTA-f16kv:thinking-medium': 'Qwen3.8-27B-ISTA-f16kv:reasoning',
     'halogen-qwen3.8-flash-next': 'halogen-qwen3.8-flash-next',
+    'ds4-deepseek-v4-flash': 'ds4-deepseek-v4-flash',
 }
 """The model that writes the summary when a builder's context is compacted. The first builder's own name is an alias
 that sets thinking on and overrides what a request asks, so its summaries come from another alias of the same
-server that answers without thinking; the second honours `enable_thinking: false` itself."""
+server that answers without thinking; the second and the third honour `enable_thinking: false` themselves."""
 
 CONTEXT_WINDOWS = {
     'Qwen3.8-27B-ISTA-f16kv:thinking-medium': 147_456,
     'Qwen3.8-27B-ISTA-f16kv:reasoning': 147_456,
     'halogen-qwen3.8-flash-next': 262_144,
+    'ds4-deepseek-v4-flash': 126_000,
 }
 """Each model's context window in tokens, read off its server (`--ctx-size`, and `/v1/models`). The framework assumes
 200,000 for a model it does not know, which for the first builder is past its real window."""
@@ -88,6 +92,10 @@ PROFILES = {
     'Qwen3.8-27B-ISTA-f16kv:thinking-medium': lambda: local_profile('qwen3.8-27b', 'Qwen3.8-27B-ISTA-f16kv:thinking-medium'),
     'Qwen3.8-27B-ISTA-f16kv:reasoning': lambda: local_profile('qwen3.8-27b', 'Qwen3.8-27B-ISTA-f16kv:reasoning'),
     'halogen-qwen3.8-flash-next': lambda: local_profile('qwen3.8-flash-next', 'halogen-qwen3.8-flash-next'),
+    # The local DeepSeek gets the cloud DeepSeek's profile, with its real window. Its server takes two leading system
+    # messages, so they are not merged.
+    'ds4-deepseek-v4-flash': lambda: merge_profile(DeepSeekProvider.model_profile('deepseek-flash'),
+                                                   {'context_window': context_window('ds4-deepseek-v4-flash')}),
 }
 """The builders other than Claude, as the proxy names them, and the profile the framework uses for each: how
 the model takes tool schemas and how its reasoning goes back to it. DeepSeek and GLM get their makers' own,
@@ -121,7 +129,7 @@ defaults to 8,192, so a limit is always sent; the other model's whole context is
 128,000 of the other builders, and a ceiling, not a target."""
 
 LOCAL_SETTINGS = OpenAIChatModelSettings(max_tokens=LOCAL_OUTPUT_LIMIT)
-"""The same request for both local models, with no `reasoning_effort`: the proxy refuses it for the second model
+"""The same request for every local model (the local DeepSeek too, whose server would take it), with no `reasoning_effort`: the proxy refuses it for the second model
 (`UnsupportedParamsError`), and the first model's thinking and sampling are its llama-swap alias's
 (`chat_template_kwargs`, temperature 1.0, top-p 0.95), not this parameter's. What the second model thinks by
 default is read off its logged requests, not assumed."""

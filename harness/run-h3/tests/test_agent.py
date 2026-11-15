@@ -45,7 +45,7 @@ def test_claude_gets_claude_codes_settings_and_the_others_reasoning_at_medium():
 def test_the_local_models_get_an_output_limit_and_no_reasoning_effort():
     # halogen caps max_tokens at 65,536 and defaults to 8,192 when none is sent; the proxy refuses reasoning_effort for it
     assert LOCAL_SETTINGS == {'max_tokens': 32_768}
-    assert set(LOCAL_MODELS) == {'Qwen3.8-27B-ISTA-f16kv:thinking-medium', 'halogen-qwen3.8-flash-next'}
+    assert set(LOCAL_MODELS) == {'Qwen3.8-27B-ISTA-f16kv:thinking-medium', 'halogen-qwen3.8-flash-next', 'ds4-deepseek-v4-flash'}
 
 
 def test_a_model_h3_does_not_know_is_refused():
@@ -79,6 +79,12 @@ def test_each_builder_is_reached_in_its_own_format(monkeypatch):
     for model in LOCAL_MODELS:
         local = models.build_model(run='r', session='s', model=model)
         assert str(local.client.base_url) == 'http://proxy.invalid:4000/v1/'
+        assert local.profile.get('context_window') == CONTEXT_WINDOWS[model]
+        if model == 'ds4-deepseek-v4-flash':
+            # the local DeepSeek: the cloud DeepSeek's profile, its reasoning sent back in the field DeepSeek asks for
+            assert local.profile.get('openai_chat_send_back_thinking_parts') == 'field'
+            assert local.profile.get('openai_chat_thinking_field') == 'reasoning_content'
+            continue
         assert local.profile.get('openai_chat_send_back_thinking_parts', 'auto') == 'auto'
         # the loop's two leading system messages go out as one: the Qwen template accepts a system message only first
         assert local.profile.get('openai_chat_supports_multiple_system_messages') is False
