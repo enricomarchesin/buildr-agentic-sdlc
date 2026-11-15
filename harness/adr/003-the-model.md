@@ -62,7 +62,8 @@ H1's loop, unchanged, with the model as the only variable (`harness/run-h2/`).
 - **What we now own:** 1,131 non-blank lines in `harness/run-h2/` (802 Python, 227 shell, 15 config,
   87 of the prompts and lists copied from H0), and 383 lines of tests. The difference from H1 is
   the models' profiles and the setting that replaces the coder's instructions with a file.
-- **What we learned about F1.AC2.** It fails in 16 of 32 builds, in every family's but Gemini's.
+- **What we learned about F1.AC2.** It fails in 16 of 32 builds, Sonnet's two reused H1 builds among
+  them, in every family's but Gemini's.
   Across the builds the reviewers reported it in about half the failing cases, and labelled it
   medium or low every time but three; those three were fixed and hold, and every other report
   shipped. The model is part of it: Gemini's builds got it right every time. The label decides what
@@ -74,9 +75,8 @@ H1's loop, unchanged, with the model as the only variable (`harness/run-h2/`).
   to $14.36 (Gemini 4 Carbon).
 - **The environment failed in ways that looked like results**: a grading sandbox without a route to
   the proxy, an install rule that turned one README into 37 failures, checks wrong in both
-  directions (each logged), a provider's route that cut long answers, and a full disk. Each was
-  caught by reading the evidence; 13 builds hit by a provider's route or the machine were scrapped
-  and rebuilt.
+  directions (each logged), and a full disk. Each was caught by reading the evidence; 13 builds
+  hit by a provider's route or the machine were scrapped and rebuilt.
 - **What is still not possible:** a claim about which model is better. And a review whose labels
   follow its prompt: the loop acts on the labels it is given.
 - **Numbers**, from `CHANGELOG.md`: verification set, 32 builds: F1.AC2 16/32; F5.AC1 27/32; F6.AC1
@@ -95,6 +95,6 @@ medium. That is where a known fault waits to ship.
 ## Links
 
 - Spec: `spec/SPEC.md`, version 1.0
-- Expectations touched: none changed for this version; checks corrected along the way are logged with the eval method
+- Expectations touched: none changed for this version; checks corrected along the way are logged with the held-out checks, which stay private
 - Post:
 - Deep dive:
