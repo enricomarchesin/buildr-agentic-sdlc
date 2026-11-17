@@ -43,12 +43,15 @@ PROFILES = {
     # The two families' smaller models, added after the six were built, each with its family's profile.
     'glm-5.3-flash': lambda: ZaiProvider.model_profile('glm-5.3-flash'),
     'mimo-v2.6-flash': lambda: LiteLLMProvider.model_profile('mimo-v2.6-flash'),
+    # Tencent's two, added later still. Both answer a tool turn whether their reasoning goes back or not.
+    'hy4': lambda: LiteLLMProvider.model_profile('hy4'),
+    'hy4-flash': lambda: LiteLLMProvider.model_profile('hy4-flash'),
 }
 """The builders other than Claude, as the proxy names them, and the profile the framework uses for each: how
 the model takes tool schemas and how its reasoning goes back to it. DeepSeek and GLM get their makers' own,
 which send the reasoning back in `reasoning_content`, as DeepSeek requires on every turn with tools; a name
 the generic profile reads (`deepseek-v4.1-…` is not `deepseek-v4-…`) would turn DeepSeek's thinking off.
-The framework has no profile for Xiaomi, so MiMo gets the one OpenAI-compatible endpoints share."""
+The framework has no profile for Xiaomi or Tencent, so MiMo and Hunyuan get the one OpenAI-compatible endpoints share."""
 FAMILIES = tuple(PROFILES)
 
 OUTPUT_LIMIT = 128_000
