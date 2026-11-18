@@ -114,6 +114,60 @@ async def test_a_reviewer_that_changes_nothing_leaves_no_trace(run):
     assert not (run.archive / 'review-changed-repo.txt').exists()
 
 
+def log(run: Run, fmt: str) -> list[str]:
+    done = subprocess.run(['git', '-C', str(run.repo), 'log', f'--format={fmt}'], capture_output=True, text=True, check=True)
+    return done.stdout.splitlines()
+
+
+def status(run: Run) -> str:
+    return subprocess.run(['git', '-C', str(run.repo), 'status', '--porcelain'], capture_output=True, text=True, check=True).stdout
+
+
+def sessions_that_write(run, monkeypatch):
+    """`live_session` with the session itself replaced by one that edits the repository."""
+
+    async def write(*, archive, run_id, name, prompt, backend, deadline):
+        (run.repo / 'SPEC.md').write_text(f'changed by {name}\n')
+        (run.repo / f'{name}.go').write_text('package main\n')
+        return {'status': 'success'}
+
+    monkeypatch.setattr(loop, 'run_session', write)
+    monkeypatch.setattr(loop, 'SbxBackend', lambda *a, **k: None)
+    return loop.live_session(run, 'r', deadline=0.0)
+
+
+async def test_a_build_or_fix_session_leaves_its_work_committed_by_the_harness(run, monkeypatch):
+    session = sessions_that_write(run, monkeypatch)
+    await session('build', 'p', run.build_sandbox)
+    await session('fix-1', 'p', run.build_sandbox)
+    assert log(run, '%s') == ['fix-1: the working tree as the session left it', 'build: the working tree as the session left it', 'spec']
+    assert log(run, '%an')[:2] == ['heatctl-harness', 'heatctl-harness']
+    assert status(run) == '', 'nothing left uncommitted'
+
+
+async def test_a_review_session_is_not_committed(run, monkeypatch):
+    session = sessions_that_write(run, monkeypatch)
+    await session('review-1', 'p', run.review_sandbox)
+    assert log(run, '%s') == ['spec']
+
+
+def test_nothing_to_commit_makes_no_commit(run):
+    loop.commit_session(run, 'fix-1')
+    assert log(run, '%s') == ['spec']
+
+
+def test_ignored_files_stay_out_and_the_repositorys_hooks_do_not_run(run):
+    (run.repo / '.gitignore').write_text('bin/\n')
+    (run.repo / 'bin').mkdir()
+    (run.repo / 'bin' / 'heatctl').write_text('binary\n')
+    hook = run.repo / '.git' / 'hooks' / 'pre-commit'
+    hook.write_text('#!/bin/sh\nexit 1\n')
+    hook.chmod(0o755)
+    loop.commit_session(run, 'build')
+    files = subprocess.run(['git', '-C', str(run.repo), 'show', '--name-only', '--format=', 'HEAD'], capture_output=True, text=True).stdout.split()
+    assert files == ['.gitignore'], 'the build output stays out; the failing hook did not stop the commit'
+
+
 def test_the_tool_state_the_shell_leaves_in_the_repository_is_named_for_removal(run):
     """The directory is the framework's; if it renames it, this fails and the deliverable would carry the new one."""
     from pydantic_ai_harness._workspace import METADATA_DIR

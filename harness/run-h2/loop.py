@@ -7,6 +7,8 @@
 budget, a `deadline` kept in the archive, and no session starts once it has passed. The rules are
 H0's (`harness/README.md`, Gates): every review is a fresh session that sees no earlier review;
 a fix session sees the review before it; medium and low issues are recorded and never fixed.
+After each build and fix session the harness commits what the session left uncommitted, so the
+repository's history holds every round's code.
 """
 
 from __future__ import annotations
@@ -82,6 +84,20 @@ def snapshot(run: Run) -> str:
     return tree
 
 
+HARNESS_IDENTITY = ('-c', 'user.name=heatctl-harness', '-c', 'user.email=harness@heatctl.invalid', '-c', 'commit.gpgsign=false')
+
+
+def commit_session(run: Run, name: str) -> None:
+    """Commit what a build or fix session left in the working tree, if anything, as the harness.
+
+    A build may leave its last changes uncommitted; then the repository's history lacks the code of a
+    round, and a clone of it is not the code that was graded. The build's own commits stay as they are.
+    Ignored files stay out, and the repository's hooks do not run."""
+    git(run.repo, 'add', '-A', '.')
+    if git(run.repo, 'diff', '--cached', '--name-only'):
+        git(run.repo, *HARNESS_IDENTITY, 'commit', '-q', '--no-verify', '-m', f'{name}: the working tree as the session left it')
+
+
 def undo(run: Run, head: str, before: str, after: str) -> None:
     """Put the repository back as it was before a review that changed it."""
     git(run.repo, 'reset', '-q', head)
@@ -145,6 +161,8 @@ def live_session(run: Run, run_id: str, deadline: float) -> Session:
             deadline=deadline,
         )
         shutil.rmtree(run.repo / TOOL_STATE, ignore_errors=True)
+        if sandbox == run.build_sandbox:  # build and fix sessions; a review leaves the repository as it found it
+            commit_session(run, name)
         if record['status'] == 'timeout':
             run.timed_out.write_text('timeout\n')
 

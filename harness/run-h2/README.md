@@ -32,7 +32,7 @@ tests/          the harness's own tests
 | What the model is asked | Claude Code's: adaptive thinking, text left out, effort medium, 128,000 output tokens | the same (`agent.py`), read off a request of Claude Code |
 | Delegates | the vendor's `Task` tool | none |
 | Request limit | the vendor's | none: the run's time is the only limit, as in H0 |
-| What a session leaves | the vendor's output stream | every message, a step log written as the session goes (`tail -f steps/NAME/events.jsonl`), and a record |
+| What a session leaves | the vendor's output stream | every message, a step log written as the session goes (`steps.db`, SQLite: every event, and the history at every round, each message stored once, so nothing a summary or a cleared tool result rewrote is lost), and a record; after a build or fix session, what it left uncommitted is committed by the harness |
 
 Shared with H0 and tested to stay so: the three prompts and the two network lists are the same
 bytes (`tests/test_prompts.py`), and a prompt is built the way H0's shell built it.
