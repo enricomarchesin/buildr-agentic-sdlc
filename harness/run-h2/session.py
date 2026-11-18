@@ -11,10 +11,12 @@ A transient error of the model service, such as a stream that breaks halfway, do
 session: it is retried from the last point the step log saved, up to three times. Claude Code does
 the same, which is why none of H0's builds died of one. Every retry is in the session's record.
 
-Kept, in the run's archive: `steps/NAME/`, written as the session goes, so a session still running
-can be followed with `tail -f steps/NAME/events.jsonl`, and one that stops leaves what it did;
-`NAME.messages.json`, every message of the conversation, tool calls and results included; and
-`NAME.session.json`, how it ended and what it cost.
+Kept, in the run's archive: `steps.db`, the framework's step log, written as the session goes, so a
+session still running can be followed and one that stops leaves what it did: every event, and the
+history at every round, each message stored once and each round's history as references to them, so
+a round survives a summary or a cleared tool result that later rewrote the history; `NAME.messages.json`,
+the history as the session ended, tool calls and results included; and `NAME.session.json`, how it
+ended and what it cost.
 """
 
 from __future__ import annotations
@@ -37,7 +39,7 @@ from pydantic_ai.exceptions import (
 )
 from pydantic_ai.messages import AgentStreamEvent, ModelMessage, ModelMessagesTypeAdapter, ModelResponse
 from pydantic_ai.workspaces import WorkspaceBackend
-from pydantic_ai_harness.step_persistence import FileStepStore
+from pydantic_ai_harness.step_persistence import SqliteStepStore
 
 from agent import NO_LIMIT, make_agent
 
@@ -48,13 +50,15 @@ quota is not: trying again cannot change it."""
 RETRY_AFTER = (5.0, 15.0, 45.0)
 """Seconds to wait before each retry, so three retries at most."""
 
-KEPT_SNAPSHOTS = 5
-"""Every snapshot holds the whole conversation so far, so a long session would write one per tool
-batch. The newest few stay, and the newest complete one holds all of it; the event log stays whole."""
+STEP_LOG = 'steps.db'
+"""The step log, in SQLite. Every snapshot is kept: once a summary or a cleared tool result rewrites the
+history, the snapshots from before are the only record of what was there. The store keeps each message
+once, so keeping them all costs about the conversation's own size. It runs in WAL mode: a reader can
+follow a session while it is written (`sqlite3 'file:steps.db?mode=ro'`)."""
 
 
-def step_store(archive: Path) -> FileStepStore:
-    return FileStepStore(archive / 'steps', max_snapshots_per_run=KEPT_SNAPSHOTS)
+def step_store(archive: Path) -> SqliteStepStore:
+    return SqliteStepStore(database=archive / STEP_LOG)
 
 
 async def drain(ctx: RunContext[Any], events: AsyncIterable[AgentStreamEvent]) -> None:

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import time
 from collections.abc import AsyncIterator
+from contextlib import closing
 
 import anyio
 import pytest
@@ -40,9 +42,14 @@ async def run(tmp_path, deadline_in=60.0):
     )
 
 
-def events(tmp_path) -> list[str]:
-    lines = (tmp_path / 'steps' / 'build' / 'events.jsonl').read_text().splitlines()
-    return [json.loads(line)['kind'] for line in lines]
+def step_log(tmp_path) -> sqlite3.Connection:
+    """The step log as a reader sees it while it is written: read-only."""
+    return sqlite3.connect(f'file:{tmp_path / session.STEP_LOG}?mode=ro', uri=True)
+
+
+def events(tmp_path, run_id='build') -> list[str]:
+    with closing(step_log(tmp_path)) as db:
+        return [kind for (kind,) in db.execute('SELECT kind FROM events WHERE run_id = ? ORDER BY seq', (run_id,))]
 
 
 async def test_a_session_that_finishes_leaves_its_messages_its_steps_and_its_record(tmp_path, monkeypatch):
@@ -130,7 +137,22 @@ async def test_a_transient_error_after_work_resumes_from_where_it_stopped(tmp_pa
     assert (tmp_path / 'work.log').read_text() == 'x\n', 'the work done before the error is not done again'
     kept = json.loads((tmp_path / 'build.messages.json').read_text())
     assert [m['kind'] for m in kept] == ['request', 'response', 'request', 'response']
-    assert (tmp_path / 'steps' / 'build-retry-1').is_dir(), 'the retry is its own run in the step log'
+    assert events(tmp_path, 'build-retry-1'), 'the retry is its own run in the step log'
+
+
+async def test_the_step_log_keeps_every_round_and_each_message_once(tmp_path, monkeypatch):
+    patch_agent(monkeypatch, script(*[f'$echo {n}' for n in range(8)], 'done'))
+    record = await run(tmp_path)
+    assert record['status'] == 'success' and record['requests'] == 9
+    store = session.step_store(tmp_path)
+    snapshots = await store.list_snapshots(run_id='build')
+    assert len(snapshots) >= 8, 'a snapshot for every round, none dropped'
+    early = [p for m in snapshots[0].messages for p in m.parts if isinstance(p, ToolReturnPart)]
+    assert early and str(early[0].content).startswith('0\n'), 'the first round is still there as it was then'
+    with closing(step_log(tmp_path)) as db:
+        stored = db.execute('SELECT count(*) FROM snapshot_messages').fetchone()[0]
+        referenced = db.execute('SELECT count(*) FROM snapshot_message_refs').fetchone()[0]
+    assert stored < referenced, 'a message is stored once and referenced by every later round'
 
 
 async def test_a_transient_error_on_the_first_request_is_retried_from_the_start(tmp_path, monkeypatch, no_wait):
