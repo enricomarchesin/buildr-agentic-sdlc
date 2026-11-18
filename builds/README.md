@@ -11,7 +11,8 @@ results are in the version's row of `harness/CHANGELOG.md`.
 | Build | Version | Model | Commit | Accepted | Notes |
 |---|---|---|---|---|---|
 | [`h0-20261104T165650Z-c300`](h0-20261104T165650Z-c300/) | H0, [ADR 001](../harness/adr/001-baseline.md) | Claude Code with Sonnet 5.5 | `1787b93`, "Implement heatctl", on `97f5f5e`, "spec" | 10 November 2026 | build 3 of 3; ran in the house until 12 November, kept there to roll back to |
-| [`h2-20261111T232420Z-0559`](h2-20261111T232420Z-0559/) | H2, [ADR 003](../harness/adr/003-the-model.md) | Gemini 4 Carbon, the one-line instructions | `df3f487`, "spec", with the build uncommitted: the working tree as the harness left it | 15 November 2026 | chosen by the code comparison over the other eligible builds and `c300`; runs in the house (`fixture/DEPLOYED.md`) |
+| [`h2-20261111T232420Z-0559`](h2-20261111T232420Z-0559/) | H2, [ADR 003](../harness/adr/003-the-model.md) | Gemini 4 Carbon, the one-line instructions | `df3f487`, "spec", with the build uncommitted: the working tree as the harness left it | 15 November 2026 | chosen by the code comparison over the other eligible builds and `c300`; ran in the house until 15 November, kept there to roll back to |
+| [`h0-20261113T121238Z-7d99`](h0-20261113T121238Z-7d99/) | H0, [ADR 001](../harness/adr/001-baseline.md) | Claude Code with Opus 5.5 | `015bf05`, the build session's working tree as `h0-20261113T105851Z-800f` left it, on `0c0d79a`, "spec"; its review asked for no change | 18 November 2026 | won every pair of the code comparison; runs in the house (`fixture/DEPLOYED.md`) |
 
 ## Reading a build
 
@@ -25,3 +26,6 @@ results are in the version's row of `harness/CHANGELOG.md`.
   go build -trimpath ./cmd/heatctl` with Go 1.27.3, sha256
   `58dc12c9da0ed6a2c980994ccd47c87926cafb832e45be3b4c832263529f1fb9`; `-trimpath` leaves the paths out,
   so the same command and Go version give the same hash.
+- `7d99`'s binary was built from this source for the house, `CGO_ENABLED=0 GOOS=linux GOARCH=arm64
+  go build -trimpath -ldflags "-s -w -X main.version=1.0.0" ./cmd/heatctl` with Go 1.27.3, sha256
+  `9dfdd57d6bc2445767b368f066ed9dd18092b0836073b68a93dd7cd060e3a655`.

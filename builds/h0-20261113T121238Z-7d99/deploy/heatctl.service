@@ -1,0 +1,38 @@
+[Unit]
+Description=heatctl home heating controller
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=heatctl
+Group=heatctl
+ExecStart=/usr/local/bin/heatctl run /etc/heatctl/config.yaml
+# heatctl turns every relay off on SIGTERM and exits within 5 seconds.
+KillSignal=SIGTERM
+TimeoutStopSec=10
+Restart=always
+RestartSec=5
+
+# The status socket lives in /run/heatctl; nothing else is written.
+RuntimeDirectory=heatctl
+RuntimeDirectoryMode=0750
+Environment=HEATCTL_SOCKET=/run/heatctl/heatctl.sock
+
+# Hardening: the whole filesystem is read-only for heatctl.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
