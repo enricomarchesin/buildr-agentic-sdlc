@@ -38,8 +38,22 @@ __all__ = ('CliBackend',)
 _ENV_NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
 
 _PID_DIR = '/tmp/.h2'
-_RECORD = f'mkdir -p {_PID_DIR} && echo $$ > "$0" && exec "$@"'
-"""Runs as `sh -c RECORD PIDFILE argv...`: records its PID, then becomes the command."""
+_RECORD = f'''mkdir -p {_PID_DIR} && echo $$ > "$0" || exit
+mark=$1; shift
+printf '%s' "$mark"
+"$@"
+status=$?
+printf '%s' "$mark"
+exit $status
+'''
+"""Runs as `sh -c RECORD PIDFILE MARK argv...`: records its PID, then runs the command between two copies of MARK
+on standard output.
+
+The marks are there because the tool's own client writes to the same standard output as the command: once a day
+`sbx` checks for a newer version of itself, and the notice it prints when it finds one landed in the middle of a
+command's output, which the framework expected to be base64 (a review was lost to it on 17 November 2026). What
+lies outside the marks is the tool's, not the command's, and goes to standard error. The shell stays the command's
+parent instead of becoming it, so the recorded PID is the shell's, and stopping it stops its children."""
 _STOP = '''
 kill_tree() { for c in $(pgrep -P "$1" 2> /dev/null); do kill_tree "$c"; done; kill -KILL "$1" 2> /dev/null; }
 read -r pid 2> /dev/null < "$0" || exit 0
@@ -62,6 +76,21 @@ def command_argv(command: WorkspaceCommand, shell: bool) -> list[str]:
     if isinstance(command, str):
         raise TypeError('without shell=True, command must be a sequence of arguments')
     return list(command)
+
+
+def unframed(stdout: str, mark: str) -> tuple[str, str]:
+    """The command's own output between the two marks, and what the tool wrote around them.
+
+    No mark: the command never started, so all of it is the tool's message. One mark: the command was cut short,
+    and everything after it is the command's.
+    """
+    start = stdout.find(mark)
+    if start < 0:
+        return '', stdout
+    end = stdout.rfind(mark)
+    if end == start:
+        return stdout[start + len(mark) :], stdout[:start]
+    return stdout[start + len(mark) : end], stdout[:start] + stdout[end + len(mark) :]
 
 
 def checked_env(env: Mapping[str, str]) -> dict[str, str]:
@@ -152,12 +181,15 @@ class CliBackend(WorkspaceBackend, SupportsCommands):
         self, argv: Sequence[str], *, env: Mapping[str, str], timeout: float | None, workdir: str
     ) -> CommandResult:
         pidfile = f'{_PID_DIR}/{secrets.token_hex(6)}.pid'
-        inner = ['sh', '-c', _RECORD, pidfile, *argv]
+        mark = f'<<cmd:{secrets.token_hex(8)}>>'
+        inner = ['sh', '-c', _RECORD, pidfile, mark, *argv]
         try:
             result = await self._runner.run(self.command_line(workdir, env, inner), timeout=timeout)
         except (anyio.get_cancelled_exc_class(), WorkspaceTimeoutError, WorkspaceOutputLimitError):
             await self._stop(pidfile)
             raise
+        stdout, stray = unframed(result.stdout, mark)
+        result = CommandResult(exit_code=result.exit_code, stdout=stdout, stderr=stray + result.stderr)
         if self.tool_failed(result):
             raise WorkspaceUnavailableError(
                 f'sandbox {self._name} is unavailable: {result.stderr.strip() or result.stdout.strip()}'
