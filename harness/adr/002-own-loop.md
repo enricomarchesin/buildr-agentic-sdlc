@@ -3,7 +3,7 @@
 Version: H1
 Axis: control
 Date: 2026-11-08
-Status: proposed
+Status: accepted
 
 ## Context
 

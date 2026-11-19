@@ -1,0 +1,34 @@
+[Unit]
+Description=heatctl home heating controller
+Documentation=file:///usr/local/share/doc/heatctl/README.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=heatctl
+Group=heatctl
+ExecStart=/usr/local/bin/heatctl run --config /etc/heatctl/config.yaml
+# The status socket lives in the one directory heatctl may write to.
+Environment=HEATCTL_SOCKET=/run/heatctl/heatctl.sock
+RuntimeDirectory=heatctl
+RuntimeDirectoryMode=0755
+Restart=always
+RestartSec=5
+
+# heatctl writes nothing to disk but its status socket (C7, F6.AC5).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

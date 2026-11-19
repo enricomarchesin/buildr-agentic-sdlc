@@ -8,11 +8,11 @@ fails.
 
 | | |
 |---|---|
-| Build | `h2-20261111T232420Z-0559`, H2 with Gemini 4 Carbon, spec 1.0, the one-line instructions; chosen by the code rubric over the other eligible build and over `c300` |
-| Running since | 12 November 2026, 14:43:44 UTC |
-| Soak | from 12 November 2026, in progress |
-| Accepted | not yet |
-| Before it | build 3 of H0, run `h0-20261104T165650Z-c300`, accepted 10 November 2026; kept on the Pi as `/usr/local/bin/heatctl.c300`, to roll back to |
+| Build | `h0-20261113T121238Z-7d99`, H0 with Claude Code and Opus 5.5, spec 1.0; chosen by the code comparison, which it won in every pair |
+| Running since | 15 November 2026, 17:59:09 UTC |
+| Soak | 15 to 18 November 2026 |
+| Accepted | 18 November 2026 |
+| Before it | `h2-20261111T232420Z-0559`, accepted 15 November 2026 after its soak; kept on the Pi as `/usr/local/bin/heatctl.0559`, to roll back to. `h0-20261104T165650Z-c300` remains `/usr/local/bin/heatctl.c300` |
 
 ## The house it runs in
 
@@ -23,9 +23,9 @@ fails.
 | Relays | two Shelly 1 Mini Gen3, firmware 2.0.3, one per zone; `auto_off` set by hand to 1800 s on each, the hard limit |
 | Sensors | Zigbee through Zigbee2MQTT 2.14.3: two Shelly BLU H&T Display ZB (studio, bedroom), one Sonoff SNZB-02D (bathroom, since 8 November) |
 | Zones | `day`: studio and bedroom; `bath`: bathroom |
-| Targets | 19.0, the studio 21.5 on weekdays from 09:00 to 13:00 and 14:30 to 19:30 (21.0 until 12 November); the bedroom 17.0 from 09:00 to 21:00 every day (from 08:00 between 10 and 12 November); hysteresis 0.3 since 8 November |
+| Targets | 19.0, the studio 21.5 on weekdays from 09:00 to 13:00 and 14:30 to 19:30 (21.0 until 12 November); the bedroom 17.0 from 09:00 to 21:00 every day (from 08:00 between 10 and 12 November) and 18.3 at night since 16 November (19.0 before); hysteresis 0.3 since 8 November |
 
-## The soak
+## The soak of `c300`
 
 The build did what the spec says throughout. Every problem in the soak was the house's.
 
@@ -38,7 +38,45 @@ The build did what the spec says throughout. Every problem in the soak was the h
 | 9 Nov 17:38 and 18:21 | The studio's sensor moved twice: where it was, it read warm |
 | 9 Nov 20:30 to 10 Nov 16:58 | The bathroom's sensor did not keep its 5-minute reporting, set again on 10 November: twelve times its reading went stale, the bath zone held off for about 14 minutes each time. No heat was needed there |
 
+## The soak of `0559`
+
+No wrong decision, no restart the build caused, and no error event outside a deliberate test.
+
+| When (UTC) | What happened |
+|---|---|
+| 12 Nov 14:43 | Deployed. Both relays reported off, `startup_grace` waited out, all three rooms read by 14:47; the unit runs it with one drop-in for its socket path, `HEATCTL_SOCKET=/run/heatctl/heatctl.sock` |
+| 13 Nov, 14 Nov, 15 Nov | Five heating runs of 22 to 40 minutes, each on at the target less 0.3 and off at the target plus 0.3: two from the studio's weekday schedule at 21.5, three from the bedroom's 19.0 overnight and early in the morning, with the studio on the same relay following the bedroom (B5) |
+| 13 Nov 22:41 to 22:45 | The broker stopped on purpose for about four minutes, no zone heating. `heatctl` kept running, logged the disconnect, tried to send each relay's state every 30 s and logged each failure (B8), and on reconnecting resubscribed and sent both relays their state within seconds (R2, F6.AC1) |
+| 12 to 15 Nov | The bath relay dropped off the network for a second fifteen times. `heatctl` reported it `unknown`, held the zone off for that moment, and cleared it on the relay's own report; no heating was affected. `c300` sends the state again instead; both are within the spec |
+| 15 Nov 09:55 | Restarted by hand to load a Sunday override for the studio, a schedule change, not a fault; in control two minutes later, after `startup_grace` |
+
+No sensor went stale: the longest gap between readings was 10 minutes, inside `stale_after`.
+
+## The soak of `7d99`
+
+No wrong decision in 76 hours, and no restart the build caused.
+
+| When (UTC) | What happened |
+|---|---|
+| 15 Nov 17:59 | Deployed. The first control cycle at 18:00:57 found all three rooms, left both relays off and reported no zone degraded. The day's Sunday afternoon override and its scheduled cleanup were removed before the soak started |
+| 15 to 18 Nov | Nine heating runs of 26 to 44 minutes, each on at or below the target less 0.3 and off at the target plus 0.3: three from the studio's weekday schedule at 21.5, six from the bedroom at night, with the studio on the same relay following the bedroom (B5). The relay's timer renewed every 5 minutes while on (B9) |
+| 16 Nov 11:13 to 11:17 | The broker stopped on purpose for three and a half minutes, no zone heating. `heatctl` kept running on its last readings, tried to reconnect after 1, 2, 4, 8 and 16 s and then every 30 s, and on reconnecting sent both relays their state (R2, F6.AC1) |
+| 16 Nov 21:06 | Restarted by hand to load the bedroom's new night target, 18.3; a schedule change, not a fault |
+| 17 Nov 02:59 to 10:04 | Zigbee2MQTT lost its coordinator, a network-attached adapter, and stopped retrying; no readings for 7 hours, until it was restarted by hand. After `stale_after` every room was stale and both zones held off (F4.AC4); each room came back on its first reading, and the studio's late morning run started in the same second. The house was cold until then |
+| 17 Nov 15:40 | The day relay switched on by hand, no zone heating. `heatctl` saw the mismatch after its 30 s confirmation timeout and switched it off again (B8) |
+| 15 to 18 Nov | A relay dropped off the network for under a second ten times, nine of them the bath relay. `heatctl` sent its state again as each came back, as `c300` does; no heating was affected |
+
+Not seen in the house: a relay switched off by hand during a run, and the relay's own timer
+ending a run after the broker or `heatctl` has gone (B9, F5.AC6). Both need a run in progress
+and someone at the house; the hidden checks cover the timer.
+
 ## Known in the house
+
+- Zigbee2MQTT reaches its coordinator over the network, on another subnet from Home Assistant.
+  On 17 November that path failed for 7 hours and Zigbee2MQTT gave up after a few minutes of
+  retries; short adapter faults on 18 November recovered by themselves in seconds. A Home
+  Assistant automation now alerts when Zigbee2MQTT has been down for 5 minutes, in the daytime
+  only; a night outage is reported at 08:30 if it is still down.
 
 - The bathroom's Sonoff SNZB-02D loses its temperature reporting setting each time it rejoins
   the network, and falls back to about one report an hour when the room is steady, so the bath
