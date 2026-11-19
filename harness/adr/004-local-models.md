@@ -3,7 +3,7 @@
 Version: H3
 Axis: substrate
 Date: 2026-11-14
-Status: proposed
+Status: accepted
 
 ## Context
 
@@ -103,4 +103,4 @@ you change the model.
 - Spec: `spec/SPEC.md`, version 1.0
 - Expectations touched: none changed for this version; checks corrected along the way are logged with the held-out checks, which stay private
 - Post:
-- Deep dive:
+- Deep dive: https://buildr.zone/episodes/04-where-the-model-runs/
