@@ -86,6 +86,7 @@ def write(d: Path, run: str, spec: Path, model: str, status: str) -> None:
         'instructions': instructions_source(),
         'sbx': sbx_version.splitlines()[0] if sbx_version else None,
         'template': [line for line in sh('sbx', 'template', 'ls').splitlines() if 'claude-code' in line],
+        'memory': text(d / 'memory.txt') or None,  # None: sbx's default, half of the host's memory
         'exit_status': int(status),
         'timed_out': (d / 'timeout').exists(),
         'seconds': seconds(d),

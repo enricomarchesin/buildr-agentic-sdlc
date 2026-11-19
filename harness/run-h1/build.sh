@@ -19,6 +19,10 @@
 #   HEATCTL_TIMEOUT         seconds before the run's last session is stopped, default 14400
 #   HEATCTL_PULL            sandbox image pull policy, default never: every build of a version
 #                           runs on the same image. Use missing for the very first build.
+#   HEATCTL_MEMORY          memory limit of each sandbox, in sbx's units (4g); default sbx's own,
+#                           half of the host's memory, so one runaway test can take the host
+#   HEATCTL_MIN_FREE_GB     refuse to start with less free disk than this, in GB: a host that swaps
+#                           onto a full disk kills every sandbox on it; default 0, no check
 #   HEATCTL_FROM_REPO       start from an earlier run's repository instead of an empty one, and
 #                           skip the build session: for trying the review and fix rounds again.
 #                           Its committed history is copied; its SPEC.md must match SPEC.
@@ -76,6 +80,7 @@ else
 fi
 trap cleanup EXIT
 echo "$global" | sed '/^$/d' >"$dir/global-secrets.txt"
+echo "${HEATCTL_MEMORY:-}" >"$dir/memory.txt"
 
 mark start
 prepare build "$run" "$repo"

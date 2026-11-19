@@ -13,6 +13,8 @@
 # The kit's MCP gateway is reachable from every sandbox and no policy closes it; it serves only
 # the MCP servers registered on this host, so none may be. Sets global: one "name host" a line.
 preflight() {
+  free=$(df -Pk "$HOME" | awk 'NR==2 {print int($4 / 1048576)}')
+  [ "$free" -ge "${HEATCTL_MIN_FREE_GB:-0}" ] || die "$free GB free on the disk, under HEATCTL_MIN_FREE_GB=$HEATCTL_MIN_FREE_GB"
   global=$(sbx secret ls --json | python3 -c '
 import sys, json
 known = {"anthropic": ["api.anthropic.com"], "openai": ["api.openai.com", "auth.openai.com", "chatgpt.com"],
@@ -88,7 +90,8 @@ sys.exit(1 if bad else 0)' "$@"
 prepare() {  # label sandbox workspace...
   label=$1; sb=$2; shift 2
   # The build key stays on the host, with the loop; no sandbox has it.
-  sbx create --name "$sb" --pull "${HEATCTL_PULL:-never}" claude "$@" >"$dir/$label-sbx-create.log" 2>&1 \
+  sbx create --name "$sb" --pull "${HEATCTL_PULL:-never}" ${HEATCTL_MEMORY:+--memory "$HEATCTL_MEMORY"} \
+    claude "$@" >"$dir/$label-sbx-create.log" 2>&1 \
     || die "could not create the $label sandbox: $dir/$label-sbx-create.log"
   sbx policy allow network --sandbox "$sb" "$(paste -s -d, - <"$here/allowlist.txt")" >/dev/null
 
