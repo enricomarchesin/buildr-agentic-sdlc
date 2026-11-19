@@ -67,7 +67,9 @@ Anthropic's format, to a LiteLLM proxy on the operator's network (`HEATCTL_MODEL
 which forwards to whichever provider serves the model. Every version uses the same proxy and
 the same build key, so a version that changes the model changes only its name. The proxy
 logs every call with its cost, tagged with the run id, which gives each build's model
-spend.
+spend. A build on a Claude subscription goes through `harness/subscription-proxy.py` instead,
+on the host: the sandbox's own proxy strips any credential a sandbox sends to Anthropic, so the
+subscription's token stays on the host and the build reaches the proxy as it would LiteLLM.
 
 The sandbox mounts the repository read-write and nothing else from the host. The agent has
 no route to the sandbox daemon, so it cannot change its own policy. H0 does not claim this
