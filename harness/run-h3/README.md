@@ -1,6 +1,6 @@
 # run-h3
 
-H3 is `../run-h2/` with two local models added, reached through the same proxy in its OpenAI format
+H3 is `../run-h2/` with three local models added, reached through the same proxy in its OpenAI format
 (`models.py`, `LOCAL_MODELS`). What differs from H2: their output limit is 32,768 tokens and their request sends
 no `reasoning_effort` (`LOCAL_SETTINGS`), and the loop's two leading system messages go out as one
 (`local_profile`), since the models' chat template accepts a system message only first; the run's time limit is 6 hours, not 4 (`HEATCTL_TIMEOUT`); run ids start `h3-`
